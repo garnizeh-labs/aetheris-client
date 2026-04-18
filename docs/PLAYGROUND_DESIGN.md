@@ -1,4 +1,5 @@
----Version: 0.2.0
+---
+Version: 0.2.0
 Status: Phase 1 — Live
 Phase: P1
 Last Updated: 2026-04-18

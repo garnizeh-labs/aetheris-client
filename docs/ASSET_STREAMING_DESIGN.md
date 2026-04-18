@@ -1,4 +1,5 @@
----Version: 0.1.0-draft
+---
+Version: 0.1.0-draft
 Status: Phase 2 — Proposed / Phase 3 — Specified
 Phase: P2 | P3
 Last Updated: 2026-04-15
