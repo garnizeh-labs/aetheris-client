@@ -1,0 +1,87 @@
+name: CI
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  CARGO_TERM_COLOR: always
+  RUSTFLAGS: "-D warnings"
+
+jobs:
+  # --- STAGE 1: FAST CHECKS & LINTS ---
+  fmt:
+    name: Format Check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@1.94.1
+        with:
+          toolchain: 1.94.1
+      - run: cargo fmt --all --check
+
+  security:
+    name: Security Audit
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@1.94.1
+        with:
+          toolchain: 1.94.1
+      - uses: taiki-e/install-action@cargo-deny
+      - uses: taiki-e/install-action@cargo-audit
+      - name: License & Advisory Check
+        run: cargo deny check
+      - name: Vulnerability Scan
+        run: cargo audit
+
+  clippy:
+    name: Clippy Lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@1.94.1
+        with:
+          toolchain: 1.94.1
+      - uses: Swatinem/rust-cache@v2
+      - run: cargo clippy --workspace --all-targets -- -D warnings
+
+  docs-audit:
+    name: Documentation Audit
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install codespell
+        run: sudo apt-get update && sudo apt-get install -y codespell
+      - name: Run Frontmatter Lint
+        run: python3 scripts/doc_lint.py
+      - name: Run Link Check
+        run: python3 scripts/check_links.py
+      - name: Run Spelling Check
+        run: codespell
+
+  # --- STAGE 2: HEAVY LIFTING ---
+  wasm-build:
+    name: WASM Build
+    needs: [fmt, security, clippy]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@nightly-2025-07-01
+        with:
+          toolchain: nightly-2025-07-01
+          targets: wasm32-unknown-unknown
+          components: rust-src
+      - uses: Swatinem/rust-cache@v2
+      - run: |
+          RUSTFLAGS="-C target-feature=+atomics,+bulk-memory,+mutable-globals -C link-arg=--shared-memory -C link-arg=--import-memory --cfg=web_sys_unstable_apis" \
+          cargo +nightly-2025-07-01 build \
+            --target wasm32-unknown-unknown \
+            --release \
+            -Z build-std=std,panic_abort
