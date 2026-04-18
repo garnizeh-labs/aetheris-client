@@ -755,7 +755,7 @@ No protocol break. No client rewrite.
 
 | # | Question | Context | Status |
 |---|---|---|---|
-| Q1 | **Transform/CRDT for text edits** | `TextEditInput` assumes server is always right (last-write-wins). True collaborative editing needs Operational Transform or CRDT. Should this be an ECS system or a sidecar service? | Open — P3 research. Noted in [NEXUS_PLATFORM_DESIGN.md](NEXUS_PLATFORM_DESIGN.md) Q2. |
+| Q1 | **Transform/CRDT for text edits** | `TextEditInput` assumes server is always right (last-write-wins). True collaborative editing needs Operational Transform or CRDT. Should this be an ECS system or a sidecar service? | Open — P3 research. Noted in [NEXUS_PLATFORM_DESIGN.md](https://github.com/garnizeh-labs/nexus/blob/main/docs/NEXUS_PLATFORM_DESIGN.md) Q2. |
 | Q2 | **Input compression** | Should the engine provide delta-encoding for sequential inputs (e.g., only changed fields)? | Deferred to P3. Measure bandwidth first. |
 | Q3 | **Input prediction for text edits** | Local optimistic insert is trivial, but conflict resolution with concurrent editors is not. Define reconciliation semantics. | Open — depends on Q1 (Transform/CRDT). |
 | Q4 | **Schema versioning** | When a schema changes (new field), how do old clients interoperate? | Handled by MIGRATION_DESIGN.md protocol versioning (1-byte version header, 3-release deprecation). |

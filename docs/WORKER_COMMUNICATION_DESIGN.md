@@ -27,7 +27,7 @@ This document is the **canonical source** for:
 - SAB extensibility rules for non-game applications (Nexus platform).
 - Security requirements (cross-origin isolation for Spectre mitigation).
 
-It consolidates fragments previously scattered across [CLIENT_DESIGN.md](CLIENT_DESIGN.md) §6, [API_DESIGN.md](API_DESIGN.md) §9, [VOID_RUSH_GDD.md](VOID_RUSH_GDD.md) §12.2, and [NEXUS_PLATFORM_DESIGN.md](NEXUS_PLATFORM_DESIGN.md) §3.2–3.4.
+It consolidates fragments previously scattered across [CLIENT_DESIGN.md](CLIENT_DESIGN.md) §6, [API_DESIGN.md](https://github.com/garnizeh-labs/aetheris-protocol/blob/main/docs/API_DESIGN.md) §9, [VOID_RUSH_GDD.md](https://github.com/garnizeh-labs/void-rush/blob/main/docs/VOID_RUSH_GDD.md) §12.2, and [NEXUS_PLATFORM_DESIGN.md](https://github.com/garnizeh-labs/nexus/blob/main/docs/NEXUS_PLATFORM_DESIGN.md) §3.2–3.4.
 
 ### Design Principle
 
@@ -72,7 +72,7 @@ This document is the **canonical source** for:
 - SAB extensibility rules for non-game applications (Nexus platform).
 - Security requirements (cross-origin isolation for Spectre mitigation).
 
-It consolidates fragments previously scattered across [CLIENT_DESIGN.md](CLIENT_DESIGN.md) §6, [API_DESIGN.md](API_DESIGN.md) §9, [VOID_RUSH_GDD.md](VOID_RUSH_GDD.md) §12.2, and [NEXUS_PLATFORM_DESIGN.md](NEXUS_PLATFORM_DESIGN.md) §3.2–3.4.
+It consolidates fragments previously scattered across [CLIENT_DESIGN.md](CLIENT_DESIGN.md) §6, [API_DESIGN.md](https://github.com/garnizeh-labs/aetheris-protocol/blob/main/docs/API_DESIGN.md) §9, [VOID_RUSH_GDD.md](https://github.com/garnizeh-labs/void-rush/blob/main/docs/VOID_RUSH_GDD.md) §12.2, and [NEXUS_PLATFORM_DESIGN.md](https://github.com/garnizeh-labs/nexus/blob/main/docs/NEXUS_PLATFORM_DESIGN.md) §3.2–3.4.
 
 ### Design Principle
 

@@ -106,7 +106,7 @@ The Game Worker owns:
 - The server reconciliation logic (applying authoritative corrections from the server).
 - The `SharedArrayBuffer` producer (writes stable entity positions for the Render Worker).
 
-See [PROTOCOL_DESIGN.md](PROTOCOL_DESIGN.md) for the canonical trait definitions of `GameTransport`, `WorldState`, and `Encoder`.
+See [PROTOCOL_DESIGN.md](https://github.com/garnizeh-labs/aetheris-protocol/blob/main/docs/PROTOCOL_DESIGN.md) for the canonical trait definitions of `GameTransport`, `WorldState`, and `Encoder`.
 
 ### 3.2 Client Game Loop (60 Hz)
 
@@ -176,7 +176,7 @@ The client receives the `ChannelRegistry` configuration from the server during t
 
 Inbound server→client messages are also channel-tagged; the Game Worker can process high-priority updates (own ship state, combat events) before low-priority ones (distant entities, cosmetic effects) if the tick budget is tight.
 
-See [PRIORITY_CHANNELS_DESIGN.md §8](PRIORITY_CHANNELS_DESIGN.md#8-bidirectional-priority-processing) for the full bidirectional priority model.
+See [PRIORITY_CHANNELS_DESIGN.md §8](https://github.com/garnizeh-labs/aetheris-engine/blob/main/docs/PRIORITY_CHANNELS_DESIGN.md#8-bidirectional-priority-processing) for the full bidirectional priority model.
 
 ### 3.5 Input History Buffer
 
@@ -637,7 +637,7 @@ For production diagnostics, the client posts tick timing metrics to the server's
 - **Lerp (Linear Interpolation)**: Smoothly transitioning between two positions based on a fractional progress bit.
 - **Reconciliation**: The process of correcting local client state to match authoritative server state.
 
-[Full Glossary Document](../GLOSSARY.md)
+[Full Glossary Document](https://github.com/garnize/aetheris/blob/main/docs/GLOSSARY.md)
 
 ---
 
@@ -650,4 +650,4 @@ For production diagnostics, the client posts tick timing metrics to the server's
 | D3 | OffscreenCanvas for GPU | Decouples render submission from the main thread layout. | Major browsers drop support for OffscreenCanvas. | 2026-04-15 |
 | D4 | 100ms interpolation delay | Absorbs network jitter, ensuring smooth visuals on erratic links. | Average Internet latency drops below 20ms globally. | 2026-04-15 |
 | D5 | wgpu for rendering | Unified Rust codebase for both WebGPU and native backends (Vulkan/Metal/DX12). | A more performant web-native rendering library emerges. | 2026-04-15 |
-| D6 | Client-side Priority Channel tagging | Enables server-side inbound priority processing (`IngestPriorityRouter`). The client receives the `ChannelRegistry` from the server at handshake. See [PRIORITY_CHANNELS_DESIGN.md §8](PRIORITY_CHANNELS_DESIGN.md#8-bidirectional-priority-processing). | If 1-byte channel overhead per datagram measurably impacts bandwidth. | 2026-04-15 |
+| D6 | Client-side Priority Channel tagging | Enables server-side inbound priority processing (`IngestPriorityRouter`). The client receives the `ChannelRegistry` from the server at handshake. See [PRIORITY_CHANNELS_DESIGN.md §8](https://github.com/garnizeh-labs/aetheris-engine/blob/main/docs/PRIORITY_CHANNELS_DESIGN.md#8-bidirectional-priority-processing). | If 1-byte channel overhead per datagram measurably impacts bandwidth. | 2026-04-15 |
