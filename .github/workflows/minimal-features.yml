@@ -6,12 +6,25 @@ on:
   pull_request:
     branches: [ main ]
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   check-minimal:
+    name: Check Minimal Features (WASM)
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
       - name: Rust Toolchain
-        uses: dtolnay/rust-toolchain@stable
-      - name: Check Minimal Features
-        run: cargo check -p aetheris-client --no-default-features
+        uses: dtolnay/rust-toolchain@e97e2d8cc328f1b50210efc529dca0028893a2d9 # 1.95.0
+        with:
+          toolchain: 1.95.0
+          targets: wasm32-unknown-unknown
+      - uses: Swatinem/rust-cache@e18b497796c12c097a38f9edb9d0641fb99eee32 # v2
+      - name: Install protoc
+        run: sudo apt-get update -y && sudo apt-get install -y protobuf-compiler
+      - name: Check Minimal Features (native)
+        run: cargo check -p aetheris-client-wasm --no-default-features
+      - name: Check WASM target
+        run: cargo check -p aetheris-client-wasm --target wasm32-unknown-unknown --no-default-features

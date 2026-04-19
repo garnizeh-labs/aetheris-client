@@ -1,0 +1,112 @@
+syntax = "proto3";
+package aetheris.auth.v1;
+
+service AuthService {
+    // ── Email OTP path ──
+    rpc RequestOtp(OtpRequest) returns (OtpRequestAck);
+
+    // ── Unified Login path ──
+    rpc Login(LoginRequest) returns (LoginResponse);
+    rpc CreateGoogleLoginNonce(GoogleLoginNonceRequest) returns (GoogleLoginNonceResponse);
+
+    // ── Session lifecycle (unchanged) ──
+    rpc Logout(LogoutRequest) returns (LogoutResponse);
+    rpc RefreshToken(RefreshRequest) returns (RefreshResponse);
+    rpc IssueConnectToken(ConnectTokenRequest) returns (ConnectTokenResponse);
+}
+
+// ── Email OTP ──────────────────────────────────────────────────────
+
+message OtpRequest {
+    // RFC-5321-compatible email. Server normalizes (lowercase, trim).
+    string email = 1;
+}
+
+message OtpRequestAck {
+    // Opaque server-chosen handle for this OTP attempt.
+    string request_id = 1;
+    // Unix timestamp in milliseconds when the request expires.
+    uint64 expires_at_unix_ms = 2;
+    // populated if the email is rate-limited.
+    optional uint32 retry_after_seconds = 3;
+}
+
+// ── Unified Login ──────────────────────────────────────────────────
+
+message LoginRequest {
+    oneof method {
+        OtpLoginRequest    otp    = 1;
+        GoogleLoginRequest google = 2;
+    }
+    ClientMetadata metadata = 3;
+}
+
+message ClientMetadata {
+    string client_version = 1;
+    string platform       = 2; // e.g., "wasm", "ios", "windows"
+}
+
+message OtpLoginRequest {
+    string request_id = 1;
+    string code       = 2;  // 6-digit numeric, ASCII "000000".."999999"
+}
+
+message GoogleLoginRequest {
+    string google_id_token = 1;
+    string nonce_handle    = 2; // Handle returned by CreateGoogleLoginNonce
+}
+
+message GoogleLoginNonceRequest {}
+message GoogleLoginNonceResponse {
+    string nonce_handle = 1;
+    string nonce        = 2; // To be passed to Google OIDC by the client
+    // Unix timestamp in milliseconds when the nonce expires.
+    uint64 expires_at_unix_ms = 3;
+}
+
+// ── Shared response shape ──────────────────────────────────────────
+
+message LoginResponse {
+    string session_token = 1;
+    // Unix timestamp in milliseconds when the session expires.
+    uint64 expires_at_unix_ms = 2;
+    string player_id     = 3;
+    bool   is_new_player = 4;
+    LoginMethod login_method = 5;
+}
+
+enum LoginMethod {
+    LOGIN_METHOD_UNSPECIFIED = 0;
+    LOGIN_METHOD_EMAIL_OTP = 1;
+    LOGIN_METHOD_GOOGLE_OIDC = 2;
+}
+
+// ── Session lifecycle (unchanged) ─────────────────────────────────
+
+message LogoutRequest  { string session_token = 1; }
+message LogoutResponse { bool revoked = 1; }
+
+message RefreshRequest  { string session_token = 1; }
+message RefreshResponse {
+    string session_token = 1;  // fresh PASETO; old token's jti added to deny-list
+    // Unix timestamp in milliseconds when the session expires.
+    uint64 expires_at_unix_ms = 2;
+}
+
+message ConnectTokenRequest {
+    string session_token  = 1;
+    string server_address = 2;  // "host:4433"
+}
+
+message ConnectTokenResponse {
+    QuicConnectToken token = 1;
+}
+
+message QuicConnectToken {
+    // PASETO v4.local, footer = key id (kid) for rotation, payload = claims below.
+    string paseto             = 1;
+    string server_address     = 2;
+    uint64 expires_at_unix_ms = 3;
+    uint64 client_id          = 4;  // u64, randomly assigned at issuance
+}
+

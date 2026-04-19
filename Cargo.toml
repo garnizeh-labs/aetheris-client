@@ -1,0 +1,74 @@
+[workspace]
+resolver = "2"
+members = ["crates/*"]
+
+[workspace.package]
+version = "0.2.0"
+edition = "2024"
+rust-version = "1.95.0"
+authors = ["garnizeH Labs"]
+description = "High-performance, WASM-powered browser and native client runtime for the Aetheris multiplayer platform"
+license = "MIT OR Apache-2.0"
+repository = "https://github.com/garnizeh-labs/aetheris-client"
+readme = "README.md"
+keywords = ["game-client", "wasm", "webgpu", "multiplayer", "networking"]
+categories = ["game-engines", "wasm", "network-programming", "rendering"]
+
+[workspace.dependencies]
+# Internal Workspace Crates
+aetheris-client-wasm = { path = "crates/aetheris-client-wasm", version = "0.2.0" }
+aetheris-client-native = { path = "crates/aetheris-client-native", version = "0.2.0" }
+
+# Protocol (published — garnizeh-labs/aetheris-protocol)
+aetheris-protocol = { version = "0.2.4" }
+aetheris-encoder-serde = { version = "0.2.4" }
+aetheris-encoder-bitpack = { version = "0.2.4" }
+
+# Core Traits & Utilities
+thiserror = "2.0.18"
+async-trait = "0.1.89"
+serde = { version = "1.0.228", features = ["derive"] }
+serde_json = "1.0.138"
+rmp-serde = "1.3.1"
+rand = "0.10.1"
+ulid = { version = "1.2.1", default-features = false }
+base64 = "0.22.1"
+anyhow = "1.0.95"
+
+# gRPC / Protobuf (WASM-compatible subset — no tonic::transport)
+tonic = { version = "0.14.3", default-features = false, features = ["codegen"] }
+tonic-prost = "0.14.3"
+prost = "0.14.1"
+tonic-build = "0.14.3"
+tonic-prost-build = "0.14.3"
+tonic-web-wasm-client = "0.9.0"
+
+# Rendering & Math
+wgpu = "29.0.1"
+glam = { version = "0.32.1", features = ["bytemuck"] }
+bytemuck = { version = "1.25.0", features = ["derive"] }
+
+# Observability
+tracing = "0.1.44"
+metrics = "0.24.3"
+tracing-wasm = "0.2.1"
+
+# WASM Specifics
+wasm-bindgen = "0.2.118"
+serde-wasm-bindgen = "0.6.5"
+wasm-bindgen-futures = "0.4.68"
+web-sys = "0.3.95"
+js-sys = "0.3.95"
+console_error_panic_hook = "0.1.7"
+wasm-bindgen-test = "0.3.50"
+getrandom = { version = "0.2.17", features = ["js"] }
+getrandom_v04 = { package = "getrandom", version = "0.4.2", features = [
+    "wasm_js",
+] }
+
+[profile.release]
+opt-level = 'z'   # Minimize size
+lto = true        # Link-time optimization
+strip = "symbols" # Remove symbols
+panic = "abort"   # Save ~50KB per WASM bin
+codegen-units = 1 # Better LTO
