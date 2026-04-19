@@ -3,7 +3,7 @@ resolver = "2"
 members = ["crates/*"]
 
 [workspace.package]
-version = "0.2.1"
+version = "0.3.3"
 edition = "2024"
 rust-version = "1.95.0"
 authors = ["garnizeH Labs"]
@@ -16,13 +16,13 @@ categories = ["game-engines", "wasm", "network-programming", "rendering"]
 
 [workspace.dependencies]
 # Internal Workspace Crates
-aetheris-client-wasm = { path = "crates/aetheris-client-wasm", version = "0.2.1" }
-aetheris-client-native = { path = "crates/aetheris-client-native", version = "0.2.1" }
+aetheris-client-wasm = { path = "crates/aetheris-client-wasm", version = "0.3.3" }
+aetheris-client-native = { path = "crates/aetheris-client-native", version = "0.3.3" }
 
 # Protocol (published — garnizeh-labs/aetheris-protocol)
-aetheris-protocol = { version = "0.2.4" }
-aetheris-encoder-serde = { version = "0.2.4" }
-aetheris-encoder-bitpack = { version = "0.2.4" }
+aetheris-protocol = { version = "0.2.5" }
+aetheris-encoder-serde = { version = "0.2.5" }
+aetheris-encoder-bitpack = { version = "0.2.5" }
 
 # Core Traits & Utilities
 thiserror = "2.0.18"

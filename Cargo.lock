@@ -4,11 +4,11 @@ version = 4
 
 [[package]]
 name = "aetheris-client-native"
-version = "0.2.1"
+version = "0.3.3"
 
 [[package]]
 name = "aetheris-client-wasm"
-version = "0.2.1"
+version = "0.3.3"
 dependencies = [
  "aetheris-encoder-serde",
  "aetheris-protocol",
@@ -45,9 +45,9 @@ dependencies = [
 
 [[package]]
 name = "aetheris-encoder-serde"
-version = "0.2.4"
+version = "0.2.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a5a6802bdeecf9076c441209c1323a3a736cae6a0cd92697c06f079db574541f"
+checksum = "1e97f39dafb51372c08533a478697765e16d41ce274f8b49a3e71c7b42a45926"
 dependencies = [
  "aetheris-protocol",
  "metrics",
@@ -58,9 +58,9 @@ dependencies = [
 
 [[package]]
 name = "aetheris-protocol"
-version = "0.2.4"
+version = "0.2.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c5c03a97e7a1b5fcbbd463d0337d3f29a9a5ebc27897e3d3bca537f4d05c5249"
+checksum = "933cd37e146d5393f455ad71f632655e1cdf513326f7b867fd2f274397f2140f"
 dependencies = [
  "async-trait",
  "serde",

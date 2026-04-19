@@ -10,11 +10,13 @@ High-performance, WASM-powered browser client runtime — featuring a determinis
 >
 > 🚀 **Latest Milestone:** **M10146** — Reconnection Loop & Asset Foundation (Completed)
 
-[![CI](https://github.com/garnizeh-labs/aetheris-client/actions/workflows/ci.yml/badge.svg)](https://github.com/garnizeh-labs/aetheris-client/actions/workflows/ci.yml)
+[![Build Status](https://github.com/garnizeh-labs/aetheris-client/actions/workflows/ci.yml/badge.svg)](https://github.com/garnizeh-labs/aetheris-client/actions)
+[![Crates.io](https://img.shields.io/crates/v/aetheris-client.svg)](https://crates.io/crates/aetheris-client)
+[![Docs.rs](https://docs.rs/aetheris-client/badge.svg)](https://docs.rs/aetheris-client)
 [![Rust Version](https://img.shields.io/badge/rust-1.95.0%2B-blue.svg?logo=rust)](https://www.rust-lang.org/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![License: Apache 2.0](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
-[![Conventional Commits](https://img.shields.io/badge/Conventional%20Commits-1.0.0-yellow.svg)](https://conventionalcommits.org)
+[![Convention Commits](https://img.shields.io/badge/Conventional%20Commits-1.0.0-yellow.svg)](https://conventionalcommits.org)
 [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg?style=flat-square)](https://github.com/garnizeh-labs/aetheris-client/pulls)
 
 ## Workspace Components
