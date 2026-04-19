@@ -1,6 +1,10 @@
 # Run fast quality gate checks (fmt, clippy, test, security, docs-check)
 [group('check')]
-check: fmt clippy security docs-check wasm
+check: fmt clippy test security docs-check
+
+# Run ALL CI-equivalent checks (fast + docs-strict, udeps)
+[group('check')]
+check-all: check docs-strict udeps
 
 # Check formatting
 [group('lint')]
@@ -11,6 +15,11 @@ fmt:
 [group('lint')]
 clippy:
     cargo clippy --workspace --all-targets -- -D warnings
+
+# Run all unit and integration tests
+[group('test')]
+test:
+    cargo nextest run --workspace
 
 # Run security audits (licenses, advisories, vulnerabilities)
 [group('security')]
@@ -30,13 +39,12 @@ docs-check:
     python3 scripts/check_links.py
     uvx codespell
 
-wasm_nightly := "nightly-2025-07-01"
+# Build documentation (mirrors the CI job — warnings are errors)
+[group('doc')]
+docs-strict:
+    RUSTDOCFLAGS="-D warnings" cargo doc --workspace --no-deps
 
-# Build the WASM client using direct Cargo + wasm-bindgen
-[group('build')]
-wasm:
-    RUSTFLAGS="-C target-feature=+atomics,+bulk-memory,+mutable-globals -C link-arg=--shared-memory -C link-arg=--import-memory --cfg=web_sys_unstable_apis" \
-    cargo +{{wasm_nightly}} build \
-        --target wasm32-unknown-unknown \
-        --release \
-        -Z build-std=std,panic_abort
+# Check for unused dependencies (requires nightly; runs on main in CI)
+[group('lint')]
+udeps:
+    cargo +nightly-2025-07-01 udeps --workspace --all-targets

@@ -20,20 +20,16 @@ jobs:
     name: Format Check
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@1.94.1
-        with:
-          toolchain: 1.94.1
+      - uses: actions/checkout@v6
+      - uses: dtolnay/rust-toolchain@stable
       - run: cargo fmt --all --check
 
   security:
     name: Security Audit
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@1.94.1
-        with:
-          toolchain: 1.94.1
+      - uses: actions/checkout@v6
+      - uses: dtolnay/rust-toolchain@stable
       - uses: taiki-e/install-action@cargo-deny
       - uses: taiki-e/install-action@cargo-audit
       - name: License & Advisory Check
@@ -45,8 +41,8 @@ jobs:
     name: Clippy Lint
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@1.94.1
+      - uses: actions/checkout@v6
+      - uses: dtolnay/rust-toolchain@stable
         with:
           toolchain: 1.94.1
       - uses: Swatinem/rust-cache@v2
@@ -56,7 +52,7 @@ jobs:
     name: Documentation Audit
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - name: Install codespell
         run: sudo apt-get update && sudo apt-get install -y codespell
       - name: Run Frontmatter Lint
@@ -72,8 +68,8 @@ jobs:
     needs: [fmt, security, clippy]
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@nightly-2025-07-01
+      - uses: actions/checkout@v6
+      - uses: dtolnay/rust-toolchain@stable
         with:
           toolchain: nightly-2025-07-01
           targets: wasm32-unknown-unknown

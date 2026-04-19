@@ -35,7 +35,9 @@ def main():
     failed = False
 
     files_to_check = []
-    for root, dirs, files in os.walk(docs_root):
+    for root, _dirs, files in os.walk(docs_root):
+        # Prune excluded directories in-place to avoid descending into them
+        _dirs[:] = [d for d in _dirs if d not in {'.git', 'target', 'jemalloc', 'node_modules', 'pkg'}]
         for f in files:
             if f.endswith(".md") and f != "README.md":
                 files_to_check.append(os.path.join(root, f))
