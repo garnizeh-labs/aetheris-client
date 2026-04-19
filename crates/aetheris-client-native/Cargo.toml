@@ -1,0 +1,15 @@
+[package]
+name = "aetheris-client-native"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+description = "Native desktop client for the Aetheris multiplayer platform"
+repository.workspace = true
+readme = "README.md"
+
+[[bin]]
+name = "aetheris-client-native"
+path = "src/main.rs"
+
+[dependencies]

@@ -1,0 +1,88 @@
+[package]
+name = "aetheris-client-wasm"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+description = "WASM browser client for the Aetheris multiplayer platform"
+repository.workspace = true
+readme = "README.md"
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[build-dependencies]
+tonic-build = { workspace = true }
+tonic-prost-build = { workspace = true }
+
+[dependencies]
+# No 'grpc' feature here: that feature generates tonic service stubs whose
+# connect() method requires tonic::transport (incompatible with wasm32).
+# Proto message types (AuthRequest / AuthResponse) are generated locally by
+# this crate's own build.rs — see build.rs and src/auth.rs.
+aetheris-protocol = { workspace = true }
+
+prost = { workspace = true }
+serde = { workspace = true, features = ["derive"] }
+rmp-serde = { workspace = true }
+bytemuck = { workspace = true }
+async-trait = { workspace = true }
+tracing = { workspace = true }
+tonic = { workspace = true }
+tonic-prost = { workspace = true }
+tonic-web-wasm-client = { workspace = true }
+
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+aetheris-encoder-serde = { workspace = true }
+ulid = { workspace = true }
+wgpu = { workspace = true, features = ["webgpu"] }
+glam = { workspace = true }
+getrandom = { workspace = true }
+getrandom_v04 = { workspace = true }
+tracing-wasm = { workspace = true }
+console_error_panic_hook = { workspace = true }
+metrics = { workspace = true, optional = true }
+serde_json = { workspace = true }
+wasm-bindgen = { workspace = true }
+serde-wasm-bindgen = { workspace = true }
+wasm-bindgen-futures = { workspace = true }
+js-sys = { workspace = true }
+web-sys = { workspace = true, features = [
+    "CanvasRenderingContext2d",
+    "Document",
+    "Element",
+    "Event",
+    "EventTarget",
+    "HtmlCanvasElement",
+    "HtmlElement",
+    "Window",
+    "Worker",
+    "WorkerGlobalScope",
+    "WorkerOptions",
+    "Performance",
+    "OffscreenCanvas",
+    "WebTransport",
+    "WebTransportOptions",
+    "WebTransportBidirectionalStream",
+    "WebTransportDatagramDuplexStream",
+    "WebTransportReceiveStream",
+    "WebTransportSendStream",
+    "ReadableStream",
+    "ReadableStreamDefaultReader",
+    "WritableStream",
+    "WritableStreamDefaultWriter",
+    "console",
+    "AbortController",
+    "AbortSignal",
+    "Headers",
+    "Request",
+    "RequestInit",
+    "Response",
+] }
+
+[target.'cfg(target_arch = "wasm32")'.dev-dependencies]
+wasm-bindgen-test = { workspace = true }
+
+[features]
+metrics = ["dep:metrics"]
+nightly = []

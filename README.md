@@ -6,7 +6,7 @@ High-performance, WASM-powered browser client runtime — featuring a determinis
 
 **Aetheris Client** brings authoritative multiplayer to the browser without compromising on frame times. By leveraging a native three-worker architecture, the client isolates networking (IO), simulation (Logic), and rendering (Visuals) into parallel streams. This ensures that even during heavy network spikes or complex simulation updates, the rendering thread maintains a butter-smooth 60Hz experience using modern WebGPU pipelines.
 
-> **[Read the Client Design Document](CLIENT_DESIGN.md)** — three-worker architecture and WASM integration.
+> **[Read the Client Design Document](docs/CLIENT_DESIGN.md)** — three-worker architecture and WASM integration.
 >
 > 🚀 **Latest Milestone:** **Renderer Hardening (M1011) Complete!** Successfully integrated the Wireframe Debug Pass into the main rendering pipeline.
 
@@ -39,9 +39,9 @@ For a full list of commands, run `just --list`.
 
 ## Documentation Entry Points
 
-- **[CLIENT_DESIGN.md](CLIENT_DESIGN.md):** Worker architecture and state synchronization.
-- **[INPUT_PIPELINE_DESIGN.md](INPUT_PIPELINE_DESIGN.md):** Client-side prediction and input gathering.
-- **[WORKER_COMMUNICATION_DESIGN.md](WORKER_COMMUNICATION_DESIGN.md):** Thread safety and zero-copy message passing.
+- **[CLIENT_DESIGN.md](docs/CLIENT_DESIGN.md):** Worker architecture and state synchronization.
+- **[INPUT_PIPELINE_DESIGN.md](docs/INPUT_PIPELINE_DESIGN.md):** Client-side prediction and input gathering.
+- **[WORKER_COMMUNICATION_DESIGN.md](docs/WORKER_COMMUNICATION_DESIGN.md):** Thread safety and zero-copy message passing.
 
 ## Design Philosophy
 

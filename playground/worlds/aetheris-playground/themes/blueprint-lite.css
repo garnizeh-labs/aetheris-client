@@ -1,0 +1,45 @@
+/* worlds/aetheris-playground/themes/blueprint-lite.css — Light variant
+   High-contrast, very light blue background for readability / low-power devices. */
+:root {
+  /* Surfaces — ice-white base */
+  --bg-base: #e8f2ff;
+  --bg-surface: rgba(255, 255, 255, 0.70);
+  --bg-elevated: rgba(255, 255, 255, 0.90);
+  --bg-overlay: rgba(220, 235, 255, 0.95);
+
+  /* Accents — deeper blues for contrast on light background */
+  --accent-primary: #0369a1;
+  --accent-secondary: #4338ca;
+  --accent-danger: #b91c1c;
+  --accent-success: #15803d;
+  --accent-warning: #b45309;
+
+  /* Text — near-black on light background */
+  --text-primary: #0c1a2e;
+  --text-secondary: rgba(12, 26, 46, 0.72);
+  --text-muted: rgba(12, 26, 46, 0.48);
+  --text-on-accent: #ffffff;
+
+  /* Borders — cool blue-grey */
+  --border-subtle: rgba(3, 105, 161, 0.10);
+  --border-normal: rgba(3, 105, 161, 0.20);
+  --border-strong: rgba(3, 105, 161, 0.38);
+  --border-accent: rgba(3, 105, 161, 0.50);
+
+  /* Reduced glassmorphism — frosted white */
+  --glass-blur: 4px;
+  --glass-saturate: 120%;
+  --glass-bg: rgba(255, 255, 255, 0.75);
+  --glass-border: rgba(3, 105, 161, 0.14);
+  --glass-shadow:
+    0 4px 18px rgba(3, 105, 161, 0.10),
+    0 1px 4px rgba(3, 105, 161, 0.08);
+
+  /* Accent glow helpers */
+  --accent-glow: rgba(3, 105, 161, 0.09);
+  --accent-glow-strong: rgba(3, 105, 161, 0.18);
+  --accent-border: rgba(3, 105, 161, 0.28);
+
+  /* Grid line — barely visible on light bg */
+  --grid-line: rgba(3, 105, 161, 0.04);
+}
