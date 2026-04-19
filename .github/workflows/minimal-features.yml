@@ -25,6 +25,6 @@ jobs:
       - name: Install protoc
         run: sudo apt-get update -y && sudo apt-get install -y protobuf-compiler
       - name: Check Minimal Features (native)
-        run: cargo check -p aetheris-client-wasm --no-default-features
+        run: cargo check -p aetheris-client-wasm --no-default-features --locked
       - name: Check WASM target
-        run: cargo check -p aetheris-client-wasm --target wasm32-unknown-unknown --no-default-features
+        run: cargo check -p aetheris-client-wasm --target wasm32-unknown-unknown --no-default-features --locked

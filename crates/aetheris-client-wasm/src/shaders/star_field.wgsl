@@ -36,13 +36,22 @@ fn hash(p: vec2<f32>) -> f32 {
 
 @fragment
 fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
+    // Tunable star field parameters.
+    let UV_SCALE: f32        = 10.0;  // Zoom level for the star grid
+    let PARALLAX_SCALE: f32  = 0.5;   // Parallax camera-scroll factor
+    let STAR_THRESHOLD: f32  = 0.90;  // Fraction of cells that contain a star (lower = denser)
+    let STAR_SIZE_BASE: f32  = 0.05;  // Minimum star radius in cell-local space
+    let STAR_SIZE_VAR: f32   = 0.1;   // Random additional radius added to base
+    let BRIGHTNESS_BASE: f32 = 0.7;   // Minimum star brightness
+    let BRIGHTNESS_VAR: f32  = 0.3;   // Random additional brightness added to base
+
     // Transform clip-space UV to world-ish UV using camera
     // For an orthographic camera, we can use the translation part of the view-proj matrix
     // to offset our UVs, creating a parallax effect.
     let camera_pos = vec2<f32>(camera.view_proj[3][0], camera.view_proj[3][1]);
     
     // Scale by a small amount for subtle parallax effect
-    let uv = (in.uv * 10.0) - (camera_pos * 0.5);
+    let uv = (in.uv * UV_SCALE) - (camera_pos * PARALLAX_SCALE);
     
     let grid_uv = floor(uv);
     let local_uv = fract(uv);
@@ -51,13 +60,11 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
     
     var color = vec3<f32>(0.0);
     
-    // Increased star density for testing (0.90 instead of 0.98)
-    if (h > 0.90) {
+    if (h > STAR_THRESHOLD) {
         let star_pos = vec2<f32>(hash(grid_uv + 1.0), hash(grid_uv + 2.0));
         let dist = length(local_uv - star_pos);
-        // Larger stars for testing
-        let size = 0.05 + hash(grid_uv + 3.0) * 0.1;
-        let brightness = 0.7 + hash(grid_uv + 4.0) * 0.3;
+        let size = STAR_SIZE_BASE + hash(grid_uv + 3.0) * STAR_SIZE_VAR;
+        let brightness = BRIGHTNESS_BASE + hash(grid_uv + 4.0) * BRIGHTNESS_VAR;
         
         color = vec3<f32>(brightness) * smoothstep(size, 0.0, dist);
     }

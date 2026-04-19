@@ -84,6 +84,9 @@ enum LoginMethod {
 // ── Session lifecycle (unchanged) ─────────────────────────────────
 
 message LogoutRequest  { string session_token = 1; }
+// `revoked` semantics: true = token was active and has been revoked;
+// false = token was not found or was already revoked (idempotent);
+// a non-OK status code indicates a server-side error.
 message LogoutResponse { bool revoked = 1; }
 
 message RefreshRequest  { string session_token = 1; }

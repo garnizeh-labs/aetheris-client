@@ -12,8 +12,9 @@ def check_file(path):
     with open(path, 'r') as f:
         content = f.read()
         
-    # Extract YAML frontmatter
-    fm_match = re.search(r"^---\s*\n(.*?)\n---", content, re.DOTALL | re.MULTILINE)
+    # Extract YAML frontmatter — use \A to anchor at the true start of the file
+    # so the pattern cannot match a second `---` block deeper in the document.
+    fm_match = re.search(r"\A---\s*\n(.*?)\n---", content, re.DOTALL)
     if not fm_match:
         print(f"Error: {path} is missing frontmatter.")
         return False

@@ -1,4 +1,6 @@
 fn main() -> Result<(), Box<dyn std::error::Error>> {
+    println!("cargo:rerun-if-changed=proto/auth.proto");
+    println!("cargo:rerun-if-changed=build.rs");
     // Generate only the prost message types (AuthRequest / AuthResponse).
     // We deliberately skip client and server stubs because:
     //   - The generated client stub's connect() method references tonic::transport::Channel,

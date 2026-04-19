@@ -11,7 +11,7 @@ use wasm_bindgen::prelude::*;
 use wasm_bindgen_futures::JsFuture;
 use web_sys::{
     ReadableStreamDefaultReader, WebTransport, WebTransportBidirectionalStream,
-    WebTransportOptions, WritableStreamDefaultWriter,
+    WebTransportOptions, WebTransportSendStream, WritableStream, WritableStreamDefaultWriter,
 };
 
 use std::collections::VecDeque;
@@ -149,6 +149,7 @@ impl WebTransportBridge {
 
         // 6. Spawn background reliable stream reading loop
         let stream_read_queue = Arc::clone(&event_queue);
+        let stream_closed = Arc::clone(&closed);
         let incoming_streams = transport.incoming_bidirectional_streams();
         let stream_reader = incoming_streams
             .get_reader()
@@ -218,6 +219,9 @@ impl WebTransportBridge {
                             &"WebTransport incoming streams reader failed:".into(),
                             &e,
                         );
+                        if let Ok(mut c) = stream_closed.lock() {
+                            *c = true;
+                        }
                         break;
                     }
                 }
@@ -234,7 +238,7 @@ impl WebTransportBridge {
     }
 
     fn check_worker(&self) {
-        debug_assert_eq!(
+        assert_eq!(
             self.worker_id,
             crate::get_worker_id(),
             "WebTransportBridge accessed from wrong worker! It is pin-bound to its creating thread."
@@ -271,22 +275,27 @@ impl GameTransport for WebTransportBridge {
     async fn send_reliable(&self, _client_id: ClientId, data: &[u8]) -> Result<(), TransportError> {
         self.check_worker();
 
-        let bi_stream: WebTransportBidirectionalStream =
-            JsFuture::from(self.transport.create_bidirectional_stream())
+        // A unidirectional send stream is sufficient for client→server data; using a
+        // bidirectional stream wastes the unused readable half.
+        let send_stream: WebTransportSendStream =
+            JsFuture::from(self.transport.create_unidirectional_stream())
                 .await
                 .map_err(|e| {
                     TransportError::Io(std::io::Error::other(format!(
-                        "Failed to create bidirectional stream: {e:?}"
+                        "Failed to create unidirectional stream: {e:?}"
                     )))
                 })?
                 .unchecked_into();
 
-        let writable = bi_stream.writable();
-        let writer = writable.get_writer().map_err(|e| {
-            TransportError::Io(std::io::Error::other(format!(
-                "Failed to get stream writer: {e:?}"
-            )))
-        })?;
+        // WebTransportSendStream extends WritableStream; cast to access get_writer().
+        let writer: WritableStreamDefaultWriter = send_stream
+            .unchecked_ref::<WritableStream>()
+            .get_writer()
+            .map_err(|e| {
+                TransportError::Io(std::io::Error::other(format!(
+                    "Failed to get stream writer: {e:?}"
+                )))
+            })?;
 
         let uint8 = Uint8Array::from(data);
         JsFuture::from(writer.write_with_chunk(&uint8))

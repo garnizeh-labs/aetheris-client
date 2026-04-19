@@ -41,7 +41,7 @@ getrandom = { workspace = true }
 getrandom_v04 = { workspace = true }
 tracing-wasm = { workspace = true }
 console_error_panic_hook = { workspace = true }
-metrics = { workspace = true }
+metrics = { workspace = true, optional = true }
 serde_json = { workspace = true }
 wasm-bindgen = { workspace = true }
 serde-wasm-bindgen = { workspace = true }
@@ -84,5 +84,5 @@ web-sys = { workspace = true, features = [
 wasm-bindgen-test = { workspace = true }
 
 [features]
-metrics = []
+metrics = ["dep:metrics"]
 nightly = []

@@ -24,9 +24,9 @@ async fn test_auth_client_creation() {
     // Verifies that the gRPC-web client can be instantiated in a WASM environment
     let _client = AetherisClient::new(None).expect("Failed to create client");
 
-    // Fix: use port 9 (discard) — guaranteed to refuse connections on any OS
+    // Use an RFC 2606 reserved domain — guaranteed to never resolve.
     let login_result = AetherisClient::request_otp(
-        "http://127.0.0.1:9".to_string(),
+        "http://example.invalid".to_string(),
         "test@example.com".to_string(),
     )
     .await;

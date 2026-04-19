@@ -43,7 +43,7 @@ docs:
 docs-check:
     python3 scripts/doc_lint.py
     python3 scripts/check_links.py
-    uvx codespell
+    codespell
 
 # Build documentation (mirrors the CI job — warnings are errors)
 [group('doc')]

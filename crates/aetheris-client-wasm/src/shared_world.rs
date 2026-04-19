@@ -5,7 +5,7 @@
 //! without blocking, satisfying the zero-cost synchronization requirement of M360.
 
 use bytemuck::{Pod, Zeroable};
-use core::sync::atomic::{AtomicU32, Ordering};
+use core::sync::atomic::{AtomicU64, Ordering};
 use std::collections::HashSet;
 use std::sync::{Mutex, OnceLock};
 
@@ -53,15 +53,19 @@ pub struct SabSlot {
 }
 
 /// The header for the `SharedArrayBuffer`.
+///
+/// `state` packs `entity_count` (high 32 bits) and `flip_bit` (low 32 bits) into a
+/// single `AtomicU64` so that readers always observe a consistent pair with a single
+/// acquire load, eliminating the TOCTOU window that existed when they were separate
+/// `AtomicU32` fields.
 #[derive(Debug)]
 #[repr(C)]
 pub struct SabHeader {
-    /// Atomic flip bit (0 or 1) indicating which buffer is currently ACTIVE for readers.
-    pub flip_bit: AtomicU32, // Offset 0
-    /// Number of active entities in the visible buffer.
-    pub entity_count: AtomicU32, // Offset 4
+    /// Packed atomic state: `high 32 bits = entity_count`, `low 32 bits = flip_bit` (0 or 1).
+    /// Updated with a single `Release` store in `commit_write`.
+    pub state: AtomicU64, // Offset 0
     /// The latest server tick corresponding to the data in the active buffer.
-    pub tick: core::sync::atomic::AtomicU64, // Offset 8
+    pub tick: AtomicU64, // Offset 8
 }
 
 /// Total size in bytes required for the compact replication layout.
@@ -145,13 +149,13 @@ impl SharedWorld {
     /// Returns the active buffer index (0 or 1).
     #[must_use]
     pub fn active_index(&self) -> u32 {
-        self.header().flip_bit.load(Ordering::Acquire)
+        (self.header().state.load(Ordering::Acquire) & 0xFFFF_FFFF) as u32
     }
 
     /// Returns the entity count for the active buffer.
     #[must_use]
     pub fn entity_count(&self) -> u32 {
-        self.header().entity_count.load(Ordering::Acquire)
+        (self.header().state.load(Ordering::Acquire) >> 32) as u32
     }
 
     /// Returns the server tick for the active buffer.
@@ -179,10 +183,14 @@ impl SharedWorld {
     }
 
     /// Returns the entities currently visible to readers.
+    ///
+    /// Both the active buffer index and the entity count are derived from a single
+    /// atomic load, so readers always see a consistent pair.
     #[must_use]
     pub fn get_read_buffer(&self) -> &[SabSlot] {
-        let active = self.active_index() as usize;
-        let count = self.entity_count() as usize;
+        let state = self.header().state.load(Ordering::Acquire);
+        let active = (state & 0xFFFF_FFFF) as usize;
+        let count = ((state >> 32) as usize).min(MAX_ENTITIES);
         &self.get_buffer(active)[..count]
     }
 
@@ -199,13 +207,15 @@ impl SharedWorld {
         let active = self.active_index();
         let next_active = 1 - active;
 
-        // Ordering::Release ensures all writes to the buffer are visible
-        // before the flip bit or count changes.
+        // Store tick first; readers only use it for display, not for buffer selection.
         self.header().tick.store(tick, Ordering::Release);
-        self.header()
-            .entity_count
-            .store(entity_count, Ordering::Release);
-        self.header().flip_bit.store(next_active, Ordering::Release);
+
+        // Pack entity_count (high 32 bits) and next_active flip_bit (low 32 bits) into
+        // a single u64 and publish with one Release store. This guarantees that any
+        // reader that observes the new flip_bit also observes the matching entity_count,
+        // eliminating the TOCTOU window of the previous three-store sequence.
+        let packed = ((entity_count as u64) << 32) | (next_active as u64);
+        self.header().state.store(packed, Ordering::Release);
     }
 }
 

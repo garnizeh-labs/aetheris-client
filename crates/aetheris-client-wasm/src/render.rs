@@ -863,6 +863,13 @@ impl RenderState {
                     let count = instances.len() as u32;
                     let size = (instances.len() * std::mem::size_of::<ObjectInstance>()) as u64;
 
+                    debug_assert!(
+                        current_offset + size <= self.instance_buffer.size(),
+                        "Instance buffer overflow: offset {current_offset} + size {size} exceeds \
+                         buffer capacity {}",
+                        self.instance_buffer.size()
+                    );
+
                     self.queue.write_buffer(
                         &self.instance_buffer,
                         current_offset,

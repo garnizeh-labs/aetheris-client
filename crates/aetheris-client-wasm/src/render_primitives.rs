@@ -178,73 +178,94 @@ pub fn create_cube_mesh(w: f32, h: f32, l: f32) -> MeshData {
 }
 
 pub fn create_asteroid_mesh() -> MeshData {
-    // Low-poly octahedron
-    let vertices = vec![
-        Vertex {
-            position: [0.0, 1.0, 0.0],
-            normal: [0.0, 1.0, 0.0],
-        },
-        Vertex {
-            position: [0.0, -1.0, 0.0],
-            normal: [0.0, -1.0, 0.0],
-        },
-        Vertex {
-            position: [1.0, 0.0, 0.0],
-            normal: [1.0, 0.0, 0.0],
-        },
-        Vertex {
-            position: [-1.0, 0.0, 0.0],
-            normal: [-1.0, 0.0, 0.0],
-        },
-        Vertex {
-            position: [0.0, 0.0, 1.0],
-            normal: [0.0, 0.0, 1.0],
-        },
-        Vertex {
-            position: [0.0, 0.0, -1.0],
-            normal: [0.0, 0.0, -1.0],
-        },
-    ];
+    // Low-poly octahedron with per-face normals computed via cross product.
+    let mut vertices = Vec::new();
 
-    let indices = vec![
-        0, 2, 4, 0, 4, 3, 0, 3, 5, 0, 5, 2, 1, 4, 2, 1, 3, 4, 1, 5, 3, 1, 2, 5,
-    ];
+    let mut add_face = |p0: [f32; 3], p1: [f32; 3], p2: [f32; 3]| {
+        let v0 = glam::Vec3::from_array(p0);
+        let v1 = glam::Vec3::from_array(p1);
+        let v2 = glam::Vec3::from_array(p2);
+        let normal = (v1 - v0).cross(v2 - v0).normalize().to_array();
+        vertices.push(Vertex {
+            position: p0,
+            normal,
+        });
+        vertices.push(Vertex {
+            position: p1,
+            normal,
+        });
+        vertices.push(Vertex {
+            position: p2,
+            normal,
+        });
+    };
 
+    // Top apex
+    let top = [0.0, 1.0, 0.0];
+    let bot = [0.0, -1.0, 0.0];
+    let right = [1.0, 0.0, 0.0];
+    let left = [-1.0, 0.0, 0.0];
+    let front = [0.0, 0.0, 1.0];
+    let back = [0.0, 0.0, -1.0];
+
+    // Upper hemisphere
+    add_face(top, right, front);
+    add_face(top, front, left);
+    add_face(top, left, back);
+    add_face(top, back, right);
+    // Lower hemisphere
+    add_face(bot, front, right);
+    add_face(bot, left, front);
+    add_face(bot, back, left);
+    add_face(bot, right, back);
+
+    let indices = (0..vertices.len() as u16).collect();
     MeshData { vertices, indices }
 }
 
 pub fn create_projectile_mesh() -> MeshData {
-    // Small diamond
+    // Small diamond (bipyramid) with per-face normals computed via cross product.
+    let mut vertices = Vec::new();
+
+    let mut add_face = |p0: [f32; 3], p1: [f32; 3], p2: [f32; 3]| {
+        let v0 = glam::Vec3::from_array(p0);
+        let v1 = glam::Vec3::from_array(p1);
+        let v2 = glam::Vec3::from_array(p2);
+        let normal = (v1 - v0).cross(v2 - v0).normalize().to_array();
+        vertices.push(Vertex {
+            position: p0,
+            normal,
+        });
+        vertices.push(Vertex {
+            position: p1,
+            normal,
+        });
+        vertices.push(Vertex {
+            position: p2,
+            normal,
+        });
+    };
+
     let s = 0.1;
     let l = 0.4;
-    let vertices = vec![
-        Vertex {
-            position: [0.0, 0.0, l],
-            normal: [0.0, 0.0, 1.0],
-        },
-        Vertex {
-            position: [0.0, 0.0, -l],
-            normal: [0.0, 0.0, -1.0],
-        },
-        Vertex {
-            position: [s, 0.0, 0.0],
-            normal: [1.0, 0.0, 0.0],
-        },
-        Vertex {
-            position: [-s, 0.0, 0.0],
-            normal: [-1.0, 0.0, 0.0],
-        },
-        Vertex {
-            position: [0.0, s, 0.0],
-            normal: [0.0, 1.0, 0.0],
-        },
-        Vertex {
-            position: [0.0, -s, 0.0],
-            normal: [0.0, -1.0, 0.0],
-        },
-    ];
-    let indices = vec![
-        0, 2, 4, 0, 4, 3, 0, 3, 5, 0, 5, 2, 1, 4, 2, 1, 3, 4, 1, 5, 3, 1, 2, 5,
-    ];
+    let front = [0.0, 0.0, l];
+    let back = [0.0, 0.0, -l];
+    let right = [s, 0.0, 0.0];
+    let left = [-s, 0.0, 0.0];
+    let up = [0.0, s, 0.0];
+    let down = [0.0, -s, 0.0];
+
+    // Front cone
+    add_face(front, right, up);
+    add_face(front, up, left);
+    add_face(front, left, down);
+    add_face(front, down, right);
+    // Back cone
+    add_face(back, up, right);
+    add_face(back, left, up);
+    add_face(back, down, left);
+    add_face(back, right, down);
+
+    let indices = (0..vertices.len() as u16).collect();
     MeshData { vertices, indices }
 }

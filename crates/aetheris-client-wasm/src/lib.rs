@@ -183,10 +183,10 @@ mod wasm_impl {
                     ));
                 }
 
-                if !SharedWorld::is_valid(ptr) {
-                    return Err(JsValue::from_str("Invalid or stale shared_world_ptr"));
-                }
-
+                // JS-allocated SharedArrayBuffer pointers are not in the Rust registry
+                // (only Rust-owned allocations are registered). The null/alignment checks
+                // above are the only feasible boundary validation for externally-provided
+                // pointers; trusting the caller is required by the SAB contract.
                 unsafe { SharedWorld::from_ptr(ptr) }
             } else {
                 SharedWorld::new()
@@ -583,16 +583,6 @@ mod wasm_impl {
 
                             with_collector(|c| {
                                 c.update_rtt(rtt);
-                                // M10105 — also emit span if it looks like a reconnect
-                                if self.connection_state == ConnectionState::Reconnecting {
-                                    c.push_event(
-                                        2,
-                                        "transport",
-                                        "RTT recovered",
-                                        "reconnect_success",
-                                        Some(rtt),
-                                    );
-                                }
                             });
 
                             #[cfg(feature = "metrics")]
@@ -981,10 +971,12 @@ mod wasm_impl {
             self.render_buffer.clear();
             self.render_buffer.extend_from_slice(&s2.entities);
 
-            for ent in &mut self.render_buffer {
-                let prev = s1.entities.iter().find(|e| e.network_id == ent.network_id);
+            // Build a lookup map from the previous snapshot for O(1) access per entity.
+            let prev_map: std::collections::HashMap<u64, &SabSlot> =
+                s1.entities.iter().map(|e| (e.network_id, e)).collect();
 
-                if let Some(prev) = prev {
+            for ent in &mut self.render_buffer {
+                if let Some(prev) = prev_map.get(&ent.network_id).copied() {
                     ent.x = lerp(prev.x, ent.x, alpha);
                     ent.y = lerp(prev.y, ent.y, alpha);
                     ent.z = lerp(prev.z, ent.z, alpha);
