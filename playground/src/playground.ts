@@ -13,6 +13,7 @@ class AetherisPlayground {
     private entityCount: number = 0;
     private currentRequestId: string | null = null;
     private world!: WorldRegistry;
+    private _monitorRafId: number | null = null;
 
     constructor() {
         this.statusEl = document.getElementById('status')!;
@@ -79,7 +80,7 @@ class AetherisPlayground {
 
         // Populate themes
         const themes = this.world.availableThemes;
-        selector.innerHTML = themes.map(t => 
+        selector.innerHTML = themes.map(t =>
             `<option value="${t.slug}" ${t.slug === this.world.activeTheme ? 'selected' : ''}>${t.displayName}</option>`
         ).join('');
 
@@ -179,15 +180,16 @@ class AetherisPlayground {
         canvas.height = Math.floor(canvas.clientHeight * dpr);
         console.log(`[Playground] Initial Canvas Size: ${canvas.width}x${canvas.height} (DPR=${dpr})`);
 
-        // Handle resizing
+        // Handle resizing — recompute dpr each time to pick up display changes
         const resizeObserver = new ResizeObserver(entries => {
             for (const entry of entries) {
                 const { width, height } = entry.contentRect;
                 if (width > 0 && height > 0) {
-                    const physicalWidth = Math.floor(width * dpr);
-                    const physicalHeight = Math.floor(height * dpr);
+                    const currentDpr = window.devicePixelRatio || 1;
+                    const physicalWidth = Math.floor(width * currentDpr);
+                    const physicalHeight = Math.floor(height * currentDpr);
 
-                    console.log(`[Playground] Resize detected: ${width}x${height} (CSS) -> ${physicalWidth}x${physicalHeight} (Physical, DPR=${dpr})`);
+                    console.log(`[Playground] Resize detected: ${width}x${height} (CSS) -> ${physicalWidth}x${physicalHeight} (Physical, DPR=${currentDpr})`);
 
                     this.renderWorker.postMessage({
                         type: 'resize',
@@ -320,6 +322,11 @@ class AetherisPlayground {
         // Attach the ShortcutRegistry global listener (handled by our catchall now)
         // shortcuts.attach(window);
 
+        // Feature-detect transferControlToOffscreen before calling it.
+        if (!('transferControlToOffscreen' in canvas)) {
+            this.statusEl.innerText = 'Unsupported browser: OffscreenCanvas / transferControlToOffscreen is not available.';
+            return;
+        }
         const offscreen = canvas.transferControlToOffscreen();
 
         // Expose to window for global helper functions in playground.html
@@ -368,6 +375,8 @@ class AetherisPlayground {
                     bufferStat.style.display = 'inline';
                 }
 
+                // Replay active theme: render worker was not ready during boot-time sync.
+                this.world.syncThemeToWorker();
                 this.startMonitoring();
                 console.log('[Playground] Isolated mode ready.');
             } else if (type === 'wasm_metrics') {
@@ -398,6 +407,16 @@ class AetherisPlayground {
                         sharedWorldPtr,
                         canvas: offscreen
                     }, [offscreen]);
+
+                    // M10105 — route metrics_frame from render worker to game worker
+                    this.renderWorker.onmessage = (re) => {
+                        if (re.data?.type === 'metrics_frame') {
+                            this.gameWorker.postMessage(re.data);
+                        }
+                    };
+
+                    // Replay active theme: render worker was not ready during boot-time sync.
+                    this.world.syncThemeToWorker();
 
                     const sabStat = document.getElementById('stat-sab');
                     if (sabStat) sabStat.innerText = `0x${sharedWorldPtr.toString(16).toUpperCase()}`;
@@ -509,6 +528,7 @@ class AetherisPlayground {
                 case 'logout_success':
                     window.location.reload();
                     break;
+
                 case 'wasm_metrics':
                     this.updateWasmMetrics(payload);
                     break;
@@ -563,6 +583,12 @@ class AetherisPlayground {
     }
 
     private startMonitoring() {
+        // Cancel any existing monitor loop to prevent duplicates on reconnect.
+        if (this._monitorRafId !== null) {
+            cancelAnimationFrame(this._monitorRafId);
+            this._monitorRafId = null;
+        }
+
         let lastTime = performance.now();
         let frames = 0;
 
@@ -580,9 +606,9 @@ class AetherisPlayground {
                 frames = 0;
                 lastTime = now;
             }
-            requestAnimationFrame(loop);
+            this._monitorRafId = requestAnimationFrame(loop);
         };
-        requestAnimationFrame(loop);
+        this._monitorRafId = requestAnimationFrame(loop);
     }
 
     private updateWasmMetrics(metrics: any) {

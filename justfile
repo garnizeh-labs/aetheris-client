@@ -54,34 +54,38 @@ docs-strict:
 # LLVM 22 (nightly latest) renamed this symbol; wasm-bindgen 0.2.118 doesn't support it yet.
 wasm_nightly := "nightly-2025-07-01"
 
-# Build the WASM client (release) — compiles + wasm-bindgen + package.json shim
-[group('build')]
-wasm:
-    RUSTFLAGS="-C target-feature=+atomics,+bulk-memory,+mutable-globals -C link-arg=--shared-memory -C link-arg=--import-memory --cfg=web_sys_unstable_apis" \
-    cargo +{{wasm_nightly}} build \
-        --target wasm32-unknown-unknown \
-        --release \
-        -Z build-std=std,panic_abort \
-        -p aetheris-client-wasm
-    wasm-bindgen target/wasm32-unknown-unknown/release/aetheris_client_wasm.wasm \
+# WASM multi-thread build flags (shared across wasm and wasm-dev targets)
+wasm_flags := "-C target-feature=+atomics,+bulk-memory,+mutable-globals -C link-arg=--shared-memory -C link-arg=--import-memory --cfg=web_sys_unstable_apis"
+
+# Shared post-build step: run wasm-bindgen and write the package.json shim
+[private]
+_wasm_post profile:
+    wasm-bindgen target/wasm32-unknown-unknown/{{profile}}/aetheris_client_wasm.wasm \
         --out-dir crates/aetheris-client-wasm/pkg \
         --target web
     printf '{"name":"aetheris-client-wasm","type":"module","main":"./aetheris_client_wasm.js","types":"./aetheris_client_wasm.d.ts"}\n' \
         > crates/aetheris-client-wasm/pkg/package.json
 
+# Build the WASM client (release) — compiles + wasm-bindgen + package.json shim
+[group('build')]
+wasm:
+    RUSTFLAGS="{{wasm_flags}}" \
+    cargo +{{wasm_nightly}} build \
+        --target wasm32-unknown-unknown \
+        --release \
+        -Z build-std=std,panic_abort \
+        -p aetheris-client-wasm
+    just _wasm_post release
+
 # Build the WASM client (debug) — faster iteration
 [group('build')]
 wasm-dev:
-    RUSTFLAGS="-C target-feature=+atomics,+bulk-memory,+mutable-globals -C link-arg=--shared-memory -C link-arg=--import-memory --cfg=web_sys_unstable_apis" \
+    RUSTFLAGS="{{wasm_flags}}" \
     cargo +{{wasm_nightly}} build \
         --target wasm32-unknown-unknown \
         -Z build-std=std,panic_abort \
         -p aetheris-client-wasm
-    wasm-bindgen target/wasm32-unknown-unknown/debug/aetheris_client_wasm.wasm \
-        --out-dir crates/aetheris-client-wasm/pkg \
-        --target web
-    printf '{"name":"aetheris-client-wasm","type":"module","main":"./aetheris_client_wasm.js","types":"./aetheris_client_wasm.d.ts"}\n' \
-        > crates/aetheris-client-wasm/pkg/package.json
+    just _wasm_post debug
 
 # Install npm dependencies for the playground
 [group('build')]
@@ -109,13 +113,15 @@ client-dev-full: wasm-dev client-build
 # Start the Vite dev server (background)
 [group('run')]
 vite: client-install
-    cd playground && npm run dev &
+    @mkdir -p logs
+    cd playground && npm run dev >> ../logs/vite.log 2>&1 &
 
 # Start the playground in isolated sandbox mode (no server, no auth)
 [group('run')]
 playground: stop wasm-dev client-install
+    @mkdir -p logs
     @echo "Starting Playground (Isolated)..."
-    cd playground && VITE_PLAYGROUND_CONNECTED=false npm run dev &
+    cd playground && VITE_PLAYGROUND_CONNECTED=false npm run dev >> ../logs/vite.log 2>&1 &
     @echo ""
     @echo "  \x1b[1;36m┌─────────────────────────────────────────────────────────────┐\x1b[0m"
     @echo "  \x1b[1;36m│\x1b[0m  \x1b[1;37mAetheris Client — \x1b[1;34mPLAYGROUND (MODE: SANDBOX)\x1b[0m              \x1b[1;36m│\x1b[0m"
@@ -137,7 +143,7 @@ dev: wasm-dev client-install vite
 # Stop all background processes (vite)
 [group('maintenance')]
 stop:
-    -fuser -k 5173/tcp 5174/tcp 5175/tcp >/dev/null 2>&1 || true
+    -lsof -ti:5173 -ti:5174 -ti:5175 | xargs kill 2>/dev/null || true
 
 # Follow playground logs
 [group('maintenance')]
@@ -172,7 +178,7 @@ changelog:
 # Usage: just release 0.3.0
 [group('release')]
 release version: check-all
-    sed -i 's/^version = ".*"/version = "{{version}}"/' Cargo.toml
+    sed 's/^version = ".*"/version = "{{version}}"/' Cargo.toml > Cargo.toml.tmp && mv Cargo.toml.tmp Cargo.toml
     git cliff --tag v{{version}} -o CHANGELOG.md
     git add Cargo.toml CHANGELOG.md
     git commit -m "chore(release): prepare for v{{version}}"

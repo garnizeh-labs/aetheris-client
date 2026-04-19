@@ -205,9 +205,24 @@ async function initEngine() {
             }
         };
 
+        // Throttle mousemove to one message per animation frame to avoid flooding the
+        // game worker message queue on high-frequency pointer events.
+        let pendingMouseDx = 0;
+        let pendingMouseDy = 0;
+        let mouseMoveScheduled = false;
+
         window.onmousemove = (e) => {
-            if (canvas.style.display === 'block') {
-                gameWorker.postMessage({ type: 'mouse_move', payload: { dx: e.movementX, dy: e.movementY } });
+            if (canvas.style.display !== 'block') return;
+            pendingMouseDx += e.movementX;
+            pendingMouseDy += e.movementY;
+            if (!mouseMoveScheduled) {
+                mouseMoveScheduled = true;
+                requestAnimationFrame(() => {
+                    gameWorker.postMessage({ type: 'mouse_move', payload: { dx: pendingMouseDx, dy: pendingMouseDy } });
+                    pendingMouseDx = 0;
+                    pendingMouseDy = 0;
+                    mouseMoveScheduled = false;
+                });
             }
         };
 

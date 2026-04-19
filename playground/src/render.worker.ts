@@ -56,6 +56,10 @@ self.onmessage = async (e) => {
             requestAnimationFrame(frame);
         } catch (err) {
             console.error('Aetheris: Render Init Failed', err);
+            // Notify the main thread so it can display an error and avoid waiting
+            // for a renderer that will never start.
+            self.postMessage({ type: 'renderer-init-failed', error: String(err) });
+            // running stays false; do NOT call requestAnimationFrame
         }
     } else if (type === 'resize') {
         const { width, height } = e.data.payload;

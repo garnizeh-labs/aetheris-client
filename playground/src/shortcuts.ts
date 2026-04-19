@@ -57,7 +57,16 @@ function shortcutId(d: Pick<ShortcutDescriptor, 'key' | 'code' | 'ctrl' | 'shift
     if (!trigger) {
         throw new Error('[ShortcutRegistry] Descriptor must have at least one of "key" or "code"');
     }
-    const mods = [d.ctrl && 'ctrl', d.shift && 'shift', d.alt && 'alt', d.meta && 'meta']
+    // Omit the shift modifier when the trigger is already a single printable character
+    // (e.g. '?' already encodes Shift+/). Including shift would produce 'shift+?' which
+    // never matches the registered id '?' because the char itself carries the shift.
+    const isPrintableChar = trigger.length === 1;
+    const mods = [
+        d.ctrl && 'ctrl',
+        (!isPrintableChar && d.shift) && 'shift',
+        d.alt && 'alt',
+        d.meta && 'meta',
+    ]
         .filter(Boolean)
         .join('+');
     return mods ? `${mods}+${trigger.toLowerCase()}` : trigger.toLowerCase();
@@ -218,47 +227,82 @@ export class ShortcutRegistry {
             ...[...grouped.keys()].filter(c => !priorityCategories.includes(c)).sort(),
         ];
 
-        const rows = sortedCategories.map(cat => {
+        // Build the modal tree using DOM APIs to avoid XSS.
+        const modal = document.createElement('div');
+        modal.className = 'shortcut-modal glass-panel';
+
+        // Header
+        const header = document.createElement('div');
+        header.className = 'shortcut-modal-header';
+        const title = document.createElement('span');
+        title.className = 'shortcut-modal-title';
+        title.textContent = 'Keyboard Shortcuts';
+        const closeBtn = document.createElement('button');
+        closeBtn.className = 'shortcut-close-btn';
+        closeBtn.id = 'shortcut-close-btn';
+        closeBtn.setAttribute('aria-label', 'Close shortcuts overlay');
+        closeBtn.textContent = '\u2715';
+        closeBtn.addEventListener('click', () => this.hideOverlay());
+        header.appendChild(title);
+        header.appendChild(closeBtn);
+
+        // Body
+        const body = document.createElement('div');
+        body.className = 'shortcut-modal-body';
+
+        for (const cat of sortedCategories) {
             const items = grouped.get(cat)!;
-            const itemsHtml = items
-                .map(d => {
-                    const combo = shortcutId(d)
-                        .split('+')
-                        .map(k => `<kbd>${k === 'escape' ? 'Esc' : k.toUpperCase()}</kbd>`)
-                        .join(' + ');
-                    return `
-                        <div class="shortcut-row">
-                            <span class="shortcut-label">${d.label}</span>
-                            <span class="shortcut-combo">${combo}</span>
-                        </div>`;
-                })
-                .join('');
 
-            return `
-                <div class="shortcut-group">
-                    <div class="shortcut-group-title">${cat}</div>
-                    ${itemsHtml}
-                </div>`;
-        }).join('');
+            const group = document.createElement('div');
+            group.className = 'shortcut-group';
 
-        this.overlayEl.innerHTML = `
-            <div class="shortcut-modal glass-panel">
-                <div class="shortcut-modal-header">
-                    <span class="shortcut-modal-title">Keyboard Shortcuts</span>
-                    <button class="shortcut-close-btn" id="shortcut-close-btn" aria-label="Close shortcuts overlay">✕</button>
-                </div>
-                <div class="shortcut-modal-body">
-                    ${rows}
-                </div>
-                <div class="shortcut-modal-footer">
-                    Press <kbd>?</kbd> or <kbd>F1</kbd> to toggle this panel
-                </div>
-            </div>`;
+            const groupTitle = document.createElement('div');
+            groupTitle.className = 'shortcut-group-title';
+            groupTitle.textContent = cat;
+            group.appendChild(groupTitle);
 
-        const closeBtn = this.overlayEl.querySelector('#shortcut-close-btn');
-        if (closeBtn) {
-            closeBtn.addEventListener('click', () => this.hideOverlay());
+            for (const d of items) {
+                const row = document.createElement('div');
+                row.className = 'shortcut-row';
+
+                const label = document.createElement('span');
+                label.className = 'shortcut-label';
+                label.textContent = d.label;
+
+                const combo = document.createElement('span');
+                combo.className = 'shortcut-combo';
+                const keys = shortcutId(d).split('+');
+                keys.forEach((k, i) => {
+                    if (i > 0) combo.appendChild(document.createTextNode(' + '));
+                    const kbd = document.createElement('kbd');
+                    kbd.textContent = k === 'escape' ? 'Esc' : k.toUpperCase();
+                    combo.appendChild(kbd);
+                });
+
+                row.appendChild(label);
+                row.appendChild(combo);
+                group.appendChild(row);
+            }
+
+            body.appendChild(group);
         }
+
+        // Footer
+        const footer = document.createElement('div');
+        footer.className = 'shortcut-modal-footer';
+        footer.append('Press ');
+        const kbd1 = document.createElement('kbd'); kbd1.textContent = '?'; footer.appendChild(kbd1);
+        footer.append(' or ');
+        const kbd2 = document.createElement('kbd'); kbd2.textContent = 'F1'; footer.appendChild(kbd2);
+        footer.append(' to toggle this panel');
+
+        modal.appendChild(header);
+        modal.appendChild(body);
+        modal.appendChild(footer);
+
+        // Replace overlay content
+        this.overlayEl.innerHTML = '';
+        this.overlayEl.appendChild(modal);
     }
 }
 

@@ -301,10 +301,6 @@ mod wasm_impl {
                 Ok(transport) => {
                     // Security: Send Auth message immediately after connection
                     if let Some(token) = &self.session_token {
-                        use aetheris_encoder_serde::SerdeEncoder;
-                        use aetheris_protocol::traits::GameTransport;
-                        use aetheris_protocol::types::ClientId;
-
                         let encoder = SerdeEncoder::new();
                         let auth_event = NetworkEvent::Auth {
                             session_token: token.clone(),

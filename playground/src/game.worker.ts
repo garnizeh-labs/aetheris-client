@@ -12,14 +12,14 @@ let isPaused = false;
 let isBusy = false;
 
 // M10105 — FIFO Queue for UI commands to prevent async race conditions
-const commandQueue: (() => Promise<void> | void)[] = [];
+const commandQueue: ((c: AetherisClient) => Promise<void> | void)[] = [];
 
 /**
  * Processes the next command in the queue if the client is not busy.
  */
 async function processQueue() {
     if (!client || isBusy || commandQueue.length === 0) return;
-    
+
     isBusy = true;
     const op = commandQueue.shift()!;
     try {
@@ -34,17 +34,25 @@ async function processQueue() {
 }
 
 /** 
- * Safely executes a function with the client by queuing it.
+ * Safely executes a function with the client by queuing it and returning
+ * the resulting Promise so callers can await completion.
  */
-function withClient(op: (c: AetherisClient) => (Promise<void> | void)): void {
-    commandQueue.push(op);
-    processQueue();
+function withClient(op: (c: AetherisClient) => (Promise<void> | void)): Promise<void> {
+    return new Promise<void>((resolve, reject) => {
+        commandQueue.push(async (c) => {
+            try {
+                await op(c);
+                resolve();
+            } catch (e) {
+                reject(e);
+            }
+        });
+        processQueue();
+    });
 }
 
-// M10105 — flush telemetry on worker close (if supported by environment)
-self.onclose = () => {
-    try { wasm_flush_telemetry(); } catch { /* ignore */ }
-};
+// M10105 — finalize message (sent from main thread beforeunload) flushes telemetry.
+// self.onclose is not a standard WorkerGlobalScope event; use the 'finalize' message instead.
 
 /**
  * Bootstraps common systems like telemetry and flush timers.
@@ -84,7 +92,7 @@ self.onmessage = async (e) => {
         await init({ module_or_path: wasmUrl, memory });
         client = new AetherisClient();
         bootstrapSystems();
-        
+
         const sharedWorldPtr = client.shared_world_ptr();
         self.postMessage({ type: 'ready', sharedWorldPtr });
 

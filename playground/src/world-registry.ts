@@ -34,11 +34,11 @@ export const WORLDS: Record<string, WorldManifest> = {
         version: '0.1.0',
         defaultTheme: 'frost-dawn',
         themes: [
-            { slug: 'frost-dawn', displayName: 'Frost-Dawn', cssPath: '/worlds/aetheris-playground/themes/frost-dawn.css', colorScheme: 'dark' },
-            { slug: 'blueprint', displayName: 'Blueprint', cssPath: '/worlds/aetheris-playground/themes/blueprint.css', colorScheme: 'dark' },
-            { slug: 'blueprint-lite', displayName: 'Blueprint Lite', cssPath: '/worlds/aetheris-playground/themes/blueprint-lite.css', colorScheme: 'dark', reducedEffects: true },
+            { slug: 'frost-dawn', displayName: 'Frost-Dawn', cssPath: `${import.meta.env.BASE_URL}worlds/aetheris-playground/themes/frost-dawn.css`, colorScheme: 'dark' },
+            { slug: 'blueprint', displayName: 'Blueprint', cssPath: `${import.meta.env.BASE_URL}worlds/aetheris-playground/themes/blueprint.css`, colorScheme: 'dark' },
+            { slug: 'blueprint-lite', displayName: 'Blueprint Lite', cssPath: `${import.meta.env.BASE_URL}worlds/aetheris-playground/themes/blueprint-lite.css`, colorScheme: 'dark', reducedEffects: true },
         ],
-        worldCssPath: '/worlds/aetheris-playground/world.css',
+        worldCssPath: `${import.meta.env.BASE_URL}worlds/aetheris-playground/world.css`,
         shortcutNamespace: 'game',
     }
 };
