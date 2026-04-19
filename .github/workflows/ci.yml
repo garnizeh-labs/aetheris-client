@@ -48,6 +48,11 @@ jobs:
   clippy:
     name: Clippy Lint
     runs-on: ubuntu-latest
+    env:
+      # web-sys gates WebTransport and other unstable APIs behind this cfg.
+      # Required even for host-target checks because the feature list in
+      # aetheris-client-wasm/Cargo.toml enables those features unconditionally.
+      RUSTFLAGS: "-D warnings --cfg=web_sys_unstable_apis"
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
       - uses: dtolnay/rust-toolchain@e97e2d8cc328f1b50210efc529dca0028893a2d9 # 1.95.0
@@ -119,6 +124,7 @@ jobs:
     runs-on: ubuntu-latest
     env:
       RUSTDOCFLAGS: "-D warnings"
+      RUSTFLAGS: "-D warnings --cfg=web_sys_unstable_apis"
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
       - uses: dtolnay/rust-toolchain@e97e2d8cc328f1b50210efc529dca0028893a2d9 # 1.95.0
@@ -134,6 +140,8 @@ jobs:
     name: Unused Dependencies
     needs: [fmt, security, clippy]
     runs-on: ubuntu-latest
+    env:
+      RUSTFLAGS: "-D warnings --cfg=web_sys_unstable_apis"
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
       - uses: dtolnay/rust-toolchain@e97e2d8cc328f1b50210efc529dca0028893a2d9 # 1.95.0
