@@ -27,3 +27,4 @@ crates/aetheris-client-wasm/target/dev-certs/
 # --- Playground ---
 playground/node_modules/
 playground/dist/
+playground/.vite/
