@@ -455,6 +455,7 @@ mod wasm_impl {
             }
         }
 
+        #[cfg(debug_assertions)]
         #[wasm_bindgen]
         pub fn set_debug_mode(&mut self, mode: u32) {
             self.check_worker();
