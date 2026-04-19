@@ -214,7 +214,7 @@ impl SharedWorld {
         // a single u64 and publish with one Release store. This guarantees that any
         // reader that observes the new flip_bit also observes the matching entity_count,
         // eliminating the TOCTOU window of the previous three-store sequence.
-        let packed = ((entity_count as u64) << 32) | (next_active as u64);
+        let packed = (u64::from(entity_count) << 32) | u64::from(next_active);
         self.header().state.store(packed, Ordering::Release);
     }
 }
