@@ -113,7 +113,7 @@ vite: client-install
 
 # Start the playground in isolated sandbox mode (no server, no auth)
 [group('run')]
-playground: stop wasm-dev
+playground: stop wasm-dev client-install
     @echo "Starting Playground (Isolated)..."
     cd playground && VITE_PLAYGROUND_CONNECTED=false npm run dev &
     @echo ""
@@ -127,7 +127,7 @@ playground: stop wasm-dev
 
 # Full dev session: build WASM, start Vite
 [group('run')]
-dev: wasm-dev client-build vite
+dev: wasm-dev client-install vite
     @echo ""
     @echo "========================================"
     @echo "  Aetheris Client — Dev Session Ready"
