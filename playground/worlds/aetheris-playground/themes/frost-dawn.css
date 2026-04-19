@@ -1,0 +1,59 @@
+/* worlds/aetheris-playground/themes/frost-dawn.css — Solaris/Ice High-Fidelity Theme */
+:root {
+  /* Surfaces */
+  --bg-base: #0b0c0e;
+  /* Neutral charcoal, less blue */
+  --bg-surface: rgba(255, 255, 255, 0.04);
+  --bg-elevated: rgba(255, 255, 255, 0.08);
+  --bg-overlay: rgba(10, 10, 12, 0.90);
+
+  /* Solaris Accents (Orange, Brown, Red) */
+  --accent-primary: #fb923c;
+  /* Sunset Orange */
+  --accent-secondary: #c2410c;
+  /* Earthy Red/Brown */
+  --accent-danger: #dc2626;
+  /* Crimson Red */
+  --accent-success: #22c55e;
+  /* Vibrant Green */
+  --accent-warning: #f59e0b;
+  /* Amber */
+
+  /* Text - Warm legibility */
+  --text-primary: #f8fafc;
+  --text-secondary: rgba(248, 250, 252, 0.70);
+  --text-muted: rgba(248, 250, 252, 0.45);
+  --text-on-accent: #0f172a;
+
+  /* Borders - Frosty and subtle */
+  --border-subtle: rgba(255, 255, 255, 0.06);
+  --border-normal: rgba(255, 255, 255, 0.12);
+  --border-strong: rgba(255, 255, 255, 0.22);
+  --border-accent: rgba(251, 146, 60, 0.40);
+  /* Orange border */
+
+  /* High-Transparency Glassmorphism (Gelo) */
+  --glass-blur: 32px;
+  --glass-saturate: 170%;
+  --glass-bg: rgba(255, 255, 255, 0.03);
+  --glass-border: rgba(255, 255, 255, 0.09);
+  --glass-shadow:
+    0 16px 48px rgba(0, 0, 0, 0.65),
+    0 4px 16px rgba(0, 0, 0, 0.45),
+    inset 0 1px 0 rgba(255, 255, 255, 0.09);
+
+  /* Accent glow helpers */
+  --accent-glow: rgba(251, 146, 60, 0.10);
+  --accent-glow-strong: rgba(251, 146, 60, 0.22);
+  --accent-border: rgba(251, 146, 60, 0.28);
+
+  /* Grid Invariants override */
+  --grid-line: rgba(255, 255, 255, 0.02);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  * {
+    transition: none !important;
+    animation: none !important;
+  }
+}

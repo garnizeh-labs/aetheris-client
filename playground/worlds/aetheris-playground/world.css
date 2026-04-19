@@ -1,0 +1,33 @@
+/* worlds/aetheris-playground/world.css — aetheris-playground World Primitives
+   These are invariant across all themes in this world. */
+:root {
+  --world-font-display: 'Inter', system-ui, sans-serif;
+  --world-font-mono: 'JetBrains Mono', monospace;
+  --world-radius-sm: 4px;
+  --world-radius-md: 8px;
+  --world-radius-lg: 16px;
+  --world-radius-xl: 24px;
+  --world-sidebar-width: 320px;
+  --world-sidebar-side: left;
+  /* left | right */
+  --world-sidebar-gap: 20px;
+
+  /* Calculated helper defaults - themes can override these for right-side layouts */
+  --sidebar-pos-left: var(--world-sidebar-gap);
+  --sidebar-pos-right: auto;
+  --sidebar-border-left: 1px solid var(--glass-border);
+  --sidebar-border-right: 1px solid var(--glass-border);
+  --sidebar-shadow:
+    0 20px 50px rgba(0, 0, 0, 0.50),
+    0 5px 15px rgba(0, 0, 0, 0.30),
+    inset 0 1px 0 rgba(255, 255, 255, 0.10);
+
+  --world-header-height: 52px;
+  --world-transition-speed: 0.2s;
+  --world-transition-ease: cubic-bezier(0.4, 0, 0.2, 1);
+
+  /* Accent glow fallbacks — overridden by theme files */
+  --accent-glow: rgba(56, 189, 248, 0.10);
+  --accent-glow-strong: rgba(56, 189, 248, 0.22);
+  --accent-border: rgba(56, 189, 248, 0.28);
+}

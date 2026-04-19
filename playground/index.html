@@ -1,0 +1,588 @@
+<!DOCTYPE html>
+<html lang="en" data-world="aetheris-playground" data-theme="blueprint">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Aetheris Engine — WASM Client</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link
+        href="https://fonts.googleapis.com/css2?family=Inter:ital,opsz,wght@0,14..32,300;0,14..32,400;0,14..32,500;0,14..32,600;1,14..32,400&family=JetBrains+Mono:wght@400;500;700&display=swap"
+        rel="stylesheet">
+    <style>
+        /* ── Layer 1: Engine base (Global Invariants) ── */
+        :root {
+            --engine-z-modal: 1000;
+            --engine-z-overlay: 900;
+            --engine-z-sidebar: 700;
+            --engine-z-underlay: 0;
+        }
+
+        /* ── Layer 2: World primitives ── */
+        :root {
+            --world-font-display: 'Inter', system-ui, sans-serif;
+            --world-font-mono: 'JetBrains Mono', monospace;
+            --world-radius-sm: 4px;
+            --world-radius-md: 8px;
+            --world-radius-lg: 14px;
+            --world-radius-xl: 20px;
+            --world-transition-speed: 0.2s;
+            --world-transition-ease: cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        /* ── Layer 3: Frost-Dawn (Solaris) baseline tokens ── */
+        :root {
+            --bg-base: #0b0c0e;
+            --bg-surface: rgba(255, 255, 255, 0.04);
+            --bg-elevated: rgba(255, 255, 255, 0.08);
+
+            --accent-primary: #fb923c;
+            /* Sunset Orange */
+            --accent-secondary: #c2410c;
+            /* Earthy Brown */
+            --accent-danger: #dc2626;
+            --accent-success: #22c55e;
+
+            --text-primary: #f8fafc;
+            --text-secondary: rgba(248, 250, 252, 0.70);
+            --text-muted: rgba(248, 250, 252, 0.42);
+            --text-on-accent: #0f172a;
+
+            --border-subtle: rgba(255, 255, 255, 0.06);
+            --border-normal: rgba(255, 255, 255, 0.12);
+            --border-strong: rgba(255, 255, 255, 0.22);
+
+            --glass-blur: 30px;
+            --glass-saturate: 160%;
+            --glass-bg: rgba(255, 255, 255, 0.03);
+            --glass-border: rgba(255, 255, 255, 0.10);
+            --glass-shadow:
+                0 12px 40px rgba(0, 0, 0, 0.60),
+                0 4px 12px rgba(0, 0, 0, 0.40),
+                inset 0 1px 0 rgba(255, 255, 255, 0.08);
+
+            /* Legacy alias */
+            --accent-color: var(--accent-primary);
+        }
+
+        @media (prefers-reduced-motion: reduce) {
+            * {
+                transition: none !important;
+                animation: none !important;
+            }
+        }
+
+        *,
+        *::before,
+        *::after {
+            box-sizing: border-box;
+        }
+
+        html {
+            background: var(--bg-base);
+            height: 100%;
+        }
+
+        body {
+            margin: 0;
+            background: var(--bg-base);
+            color: var(--text-primary);
+            font-family: var(--world-font-display);
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 100vh;
+            position: relative;
+        }
+
+        /* Watermark */
+        body::before {
+            content: "";
+            position: fixed;
+            inset: 0;
+            background-image: url('/logo.png');
+            background-size: 85% auto;
+            background-repeat: no-repeat;
+            background-position: center;
+            opacity: 0.03;
+            pointer-events: none;
+            z-index: var(--engine-z-underlay);
+        }
+
+        /* Ambient accent glow beneath the card */
+        body::after {
+            content: "";
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 640px;
+            height: 640px;
+            background: radial-gradient(circle at center,
+                    var(--accent-glow-strong, rgba(56, 189, 248, 0.08)) 0%,
+                    transparent 65%);
+            pointer-events: none;
+            z-index: var(--engine-z-underlay);
+            animation: ambient-pulse 9s ease-in-out infinite alternate;
+        }
+
+        @keyframes ambient-pulse {
+            from {
+                opacity: 0.5;
+                transform: translate(-50%, -50%) scale(0.95);
+            }
+
+            to {
+                opacity: 1;
+                transform: translate(-50%, -50%) scale(1.12);
+            }
+        }
+
+        #auth-view,
+        canvas,
+        #status {
+            position: relative;
+            z-index: 10;
+        }
+
+        /* ════════════════════════════════════════
+         * GLASS PANEL
+         * ════════════════════════════════════════ */
+        .glass-panel {
+            background: var(--glass-bg);
+            backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate));
+            -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate));
+            border: 1px solid var(--glass-border);
+            box-shadow: var(--glass-shadow);
+            border-radius: var(--world-radius-xl);
+        }
+
+        /* ════════════════════════════════════════
+         * CANVAS
+         * ════════════════════════════════════════ */
+        canvas {
+            width: 100vw;
+            height: 100vh;
+            border-radius: 0;
+            background: #000;
+            display: none;
+        }
+
+        /* ════════════════════════════════════════
+         * AUTH CARD
+         * ════════════════════════════════════════ */
+        #auth-view {
+            width: min(400px, calc(100vw - 32px));
+            padding: 36px 40px 32px;
+            display: flex;
+            flex-direction: column;
+            gap: 22px;
+            position: relative;
+        }
+
+        /* Prismatic top-edge shimmer */
+        #auth-view::before {
+            content: "";
+            position: absolute;
+            top: 0;
+            left: 12%;
+            right: 12%;
+            height: 1px;
+            background: linear-gradient(90deg,
+                    transparent,
+                    var(--accent-glow-strong, rgba(56, 189, 248, 0.45)),
+                    rgba(255, 255, 255, 0.22),
+                    var(--accent-glow-strong, rgba(56, 189, 248, 0.45)),
+                    transparent);
+            border-radius: 50%;
+            pointer-events: none;
+        }
+
+        .auth-header {
+            text-align: center;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .auth-logo {
+            width: 48px;
+            height: 48px;
+            border-radius: var(--world-radius-lg);
+            background: var(--accent-glow, rgba(56, 189, 248, 0.10));
+            border: 1px solid var(--accent-border, rgba(56, 189, 248, 0.22));
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin-bottom: 6px;
+            font-size: 1.5rem;
+            position: relative;
+            box-shadow:
+                0 0 32px var(--accent-glow, rgba(56, 189, 248, 0.10)),
+                inset 0 1px 0 rgba(255, 255, 255, 0.08);
+        }
+
+        .auth-header h1 {
+            margin: 0;
+            font-size: 1.0625rem;
+            font-weight: 600;
+            color: var(--text-primary);
+            letter-spacing: 0.015em;
+        }
+
+        .auth-header p {
+            margin: 0;
+            font-size: 0.8125rem;
+            color: var(--text-muted);
+        }
+
+        .auth-section {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+
+        label {
+            font-size: 0.625rem;
+            font-weight: 500;
+            color: var(--text-muted);
+            letter-spacing: 0.10em;
+            text-transform: uppercase;
+        }
+
+        /* ── Inputs ── */
+        input[type="email"],
+        input[type="text"] {
+            font-family: var(--world-font-display);
+            background: rgba(0, 0, 0, 0.22);
+            border: 1px solid var(--border-normal);
+            color: var(--text-primary);
+            padding: 11px 14px;
+            border-radius: var(--world-radius-md);
+            font-size: 0.875rem;
+            outline: none;
+            width: 100%;
+            transition:
+                border-color var(--world-transition-speed) var(--world-transition-ease),
+                background var(--world-transition-speed) var(--world-transition-ease),
+                box-shadow var(--world-transition-speed) var(--world-transition-ease);
+            box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.18);
+        }
+
+        input:focus {
+            background: rgba(0, 0, 0, 0.30);
+            border-color: var(--accent-primary);
+            box-shadow:
+                0 0 0 3px var(--accent-glow, rgba(56, 189, 248, 0.12)),
+                inset 0 1px 2px rgba(0, 0, 0, 0.18);
+        }
+
+        input::placeholder {
+            color: var(--text-muted);
+            font-size: 0.8125rem;
+        }
+
+        /* ── Buttons ── */
+        button {
+            font-family: var(--world-font-display);
+            padding: 11px 16px;
+            border-radius: var(--world-radius-md);
+            font-size: 0.8125rem;
+            font-weight: 600;
+            letter-spacing: 0.02em;
+            cursor: pointer;
+            transition:
+                background var(--world-transition-speed) var(--world-transition-ease),
+                border-color var(--world-transition-speed) var(--world-transition-ease),
+                box-shadow var(--world-transition-speed) var(--world-transition-ease),
+                transform var(--world-transition-speed) var(--world-transition-ease);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            width: 100%;
+
+            /* Primary accent style */
+            background: var(--accent-glow, rgba(56, 189, 248, 0.12));
+            border: 1px solid var(--accent-border, rgba(56, 189, 248, 0.28));
+            color: var(--accent-primary);
+            box-shadow:
+                0 4px 18px var(--accent-glow, rgba(56, 189, 248, 0.10)),
+                inset 0 1px 0 rgba(255, 255, 255, 0.06);
+        }
+
+        button:hover {
+            background: var(--accent-glow-strong, rgba(56, 189, 248, 0.20));
+            border-color: var(--accent-primary);
+            box-shadow:
+                0 6px 24px var(--accent-glow-strong, rgba(56, 189, 248, 0.18)),
+                inset 0 1px 0 rgba(255, 255, 255, 0.08);
+            transform: translateY(-1px);
+        }
+
+        button:active {
+            transform: scale(0.99);
+            box-shadow: 0 2px 8px var(--accent-glow, rgba(56, 189, 248, 0.10));
+        }
+
+        button:disabled {
+            opacity: 0.35;
+            cursor: not-allowed;
+            pointer-events: none;
+            transform: none;
+        }
+
+        .secondary-btn {
+            background: rgba(255, 255, 255, 0.04);
+            border: 1px solid var(--border-subtle);
+            color: var(--text-secondary);
+            box-shadow: none;
+        }
+
+        .secondary-btn:hover {
+            background: rgba(255, 255, 255, 0.08);
+            border-color: var(--border-normal);
+            box-shadow: none;
+        }
+
+        /* ── Divider ── */
+        .divider {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            font-size: 0.5625rem;
+            color: var(--text-muted);
+            text-transform: uppercase;
+            letter-spacing: 0.12em;
+        }
+
+        .divider::before,
+        .divider::after {
+            content: "";
+            flex: 1;
+            height: 1px;
+            background: linear-gradient(90deg, transparent, var(--border-subtle), transparent);
+        }
+
+        /* ── Feedback ── */
+        .error-message {
+            color: var(--accent-danger);
+            font-size: 0.75rem;
+            text-align: center;
+            display: none;
+            padding: 9px 14px;
+            background: rgba(220, 38, 38, 0.07);
+            border: 1px solid rgba(220, 38, 38, 0.18);
+            border-radius: var(--world-radius-md);
+            line-height: 1.5;
+        }
+
+        .otp-timer {
+            color: var(--accent-primary);
+            font-size: 0.6875rem;
+            font-family: var(--world-font-mono);
+            text-align: center;
+            min-height: 1rem;
+            letter-spacing: 0.05em;
+        }
+
+        .otp-hint {
+            font-size: 0.75rem;
+            color: var(--text-muted);
+            text-align: center;
+            line-height: 1.6;
+            margin: 0;
+        }
+
+        /* ════════════════════════════════════════
+         * STATUS BAR
+         * ════════════════════════════════════════ */
+        #status {
+            margin-top: 12px;
+            font-size: 0.5625rem;
+            font-family: var(--world-font-mono);
+            color: var(--text-muted);
+            letter-spacing: 0.12em;
+            text-transform: uppercase;
+            opacity: 0.65;
+        }
+
+        /* ════════════════════════════════════════
+         * RECONNECT OVERLAY
+         * ════════════════════════════════════════ */
+        #reconnect-overlay {
+            position: fixed;
+            inset: 0;
+            background: rgba(0, 0, 0, 0.60);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            display: none;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            z-index: var(--engine-z-overlay);
+            gap: 16px;
+        }
+
+        .reconnect-card {
+            padding: 28px 40px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 14px;
+        }
+
+        .reconnect-spinner {
+            width: 26px;
+            height: 26px;
+            border: 1.5px solid var(--border-normal);
+            border-top-color: var(--accent-primary);
+            border-radius: 50%;
+            animation: spin 0.85s linear infinite;
+        }
+
+        @keyframes spin {
+            to {
+                transform: rotate(360deg);
+            }
+        }
+
+        .reconnect-msg {
+            color: var(--text-secondary);
+            font-size: 0.8125rem;
+            font-weight: 500;
+            letter-spacing: 0.02em;
+        }
+
+        /* ════════════════════════════════════════
+         * LOGOUT (in-game)
+         * ════════════════════════════════════════ */
+        #btn-logout {
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            width: auto;
+            display: none;
+            background: rgba(220, 38, 38, 0.07);
+            border: 1px solid rgba(220, 38, 38, 0.18);
+            color: var(--accent-danger);
+            padding: 7px 16px;
+            font-size: 0.5625rem;
+            letter-spacing: 0.14em;
+            font-weight: 700;
+            text-transform: uppercase;
+            border-radius: var(--world-radius-md);
+            z-index: var(--engine-z-sidebar);
+            cursor: pointer;
+            transition:
+                background var(--world-transition-speed) var(--world-transition-ease),
+                border-color var(--world-transition-speed) var(--world-transition-ease),
+                box-shadow var(--world-transition-speed) var(--world-transition-ease),
+                transform var(--world-transition-speed) var(--world-transition-ease);
+        }
+
+        #btn-logout:hover {
+            background: rgba(220, 38, 38, 0.15);
+            border-color: rgba(220, 38, 38, 0.35);
+            box-shadow: 0 4px 18px rgba(220, 38, 38, 0.12);
+            transform: translateY(-1px);
+        }
+
+        /* ── Dev hint ── */
+        .dev-hint {
+            font-size: 0.6875rem;
+            color: var(--text-muted);
+            text-align: center;
+            padding-top: 10px;
+            border-top: 1px solid var(--border-subtle);
+            line-height: 1.6;
+        }
+
+        .dev-hint a {
+            color: var(--accent-primary);
+            text-decoration: none;
+            font-weight: 500;
+            opacity: 0.85;
+            transition: opacity var(--world-transition-speed) var(--world-transition-ease);
+        }
+
+        .dev-hint a:hover {
+            opacity: 1;
+            text-decoration: underline;
+        }
+    </style>
+</head>
+
+<body>
+    <!-- Auth Card -->
+    <div id="auth-view" class="glass-panel">
+        <div class="auth-header">
+            <div class="auth-logo" aria-hidden="true">⬡</div>
+            <h1>Aetheris Engine</h1>
+            <p>Welcome, Pilot.</p>
+        </div>
+
+        <!-- Step 1: Email -->
+        <div id="email-step" class="auth-section">
+            <label for="auth-email">Email address</label>
+            <input type="email" id="auth-email" placeholder="pilot@example.com" aria-label="Email address" required
+                autocomplete="email">
+            <button id="btn-request-otp">Send Access Code</button>
+            <div id="otp-timer" class="otp-timer"></div>
+        </div>
+
+        <!-- Step 2: OTP Code -->
+        <div id="code-step" class="auth-section" style="display: none">
+            <p class="otp-hint">Check your email for a 6-digit code.</p>
+            <label for="auth-code">Access code</label>
+            <input type="text" id="auth-code" placeholder="000000" maxlength="6" pattern="\d{6}" inputmode="numeric"
+                autocomplete="one-time-code" aria-label="6-digit access code"
+                style="text-align: center; letter-spacing: 0.5em; font-family: var(--world-font-mono); font-weight: 600; font-size: 1.125rem;">
+            <button id="btn-login-otp">Verify &amp; Launch</button>
+            <button id="btn-back-otp" class="secondary-btn">Change Email</button>
+        </div>
+
+        <!-- Divider -->
+        <div class="divider">or continue with</div>
+
+        <!-- Social login -->
+        <div class="auth-section">
+            <button id="btn-google-login" class="secondary-btn">Google Account</button>
+        </div>
+
+        <!-- Feedback -->
+        <div id="auth-status"
+            style="text-align: center; font-size: 0.75rem; color: var(--text-muted); margin-bottom: -8px;"></div>
+        <div id="auth-error" class="error-message" role="alert"></div>
+
+        <!-- Dev hint -->
+        <div class="dev-hint" id="dev-hint">
+            Developer? Use the <a href="/playground.html">Isolated Sandbox</a>.
+        </div>
+    </div>
+
+    <!-- Full-screen canvas (shown after login) -->
+    <canvas id="engine-canvas" width="800" height="600"></canvas>
+
+    <!-- Reconnect overlay -->
+    <div id="reconnect-overlay" role="alertdialog" aria-label="Reconnecting">
+        <div class="reconnect-card glass-panel">
+            <div class="reconnect-spinner" aria-hidden="true"></div>
+            <div class="reconnect-msg">Reconnecting to Data Plane</div>
+        </div>
+    </div>
+
+    <!-- Status line -->
+    <div id="status" role="status" aria-live="polite">Initializing Access Protocol...</div>
+
+    <!-- Logout (in-game) -->
+    <button id="btn-logout" aria-label="Logout">LOGOUT</button>
+
+    <script type="module" src="/src/main.ts"></script>
+</body>
+
+</html>

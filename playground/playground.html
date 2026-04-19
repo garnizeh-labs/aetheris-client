@@ -1,0 +1,821 @@
+<!DOCTYPE html>
+<html lang="en" data-world="aetheris-playground" data-theme="frost-dawn">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Aetheris Playground</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link
+        href="https://fonts.googleapis.com/css2?family=Inter:ital,opsz,wght@0,14..32,300;0,14..32,400;0,14..32,500;0,14..32,600;1,14..32,400&family=JetBrains+Mono:wght@400;500;700&display=swap"
+        rel="stylesheet">
+    <style>
+        /* ═══════════════════════════════════════════════════════════════
+         * Blueprint Theme — aetheris-playground World
+         * CSS custom properties enable hot-swap theming (THEME_WORLD_DESIGN.md §3).
+         * ═══════════════════════════════════════════════════════════════ */
+        /* ── Layer 1: Engine base (Global Invariants) ── */
+        :root {
+            --engine-z-modal: 1000;
+            --engine-z-overlay: 900;
+            --engine-z-hud: 800;
+            --engine-z-sidebar: 700;
+            --engine-z-canvas: 0;
+            --engine-z-underlay: -1;
+        }
+
+        /* ── Reset & base ── */
+        *,
+        *::before,
+        *::after {
+            box-sizing: border-box;
+        }
+
+        html {
+            background: var(--bg-base);
+            height: 100%;
+        }
+
+        body {
+            margin: 0;
+            background-color: var(--bg-base);
+            background-image:
+                linear-gradient(var(--grid-line, rgba(255, 255, 255, 0.025)) 1px, transparent 1px),
+                linear-gradient(90deg, var(--grid-line, rgba(255, 255, 255, 0.025)) 1px, transparent 1px);
+            background-size: var(--grid-size, 40px) var(--grid-size, 40px);
+            color: var(--text-primary);
+            font-family: var(--world-font-display);
+            overflow: hidden;
+            height: 100vh;
+            position: relative;
+        }
+
+        body::before {
+            content: "";
+            position: absolute;
+            inset: 0;
+            background-image: url('/logo.png');
+            background-size: 75% auto;
+            background-repeat: no-repeat;
+            background-position: center;
+            opacity: 0.04;
+            pointer-events: none;
+            z-index: var(--engine-z-underlay);
+        }
+
+        /* ── Glass panel utility ── */
+        .glass-panel {
+            background: var(--glass-bg);
+            backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate));
+            -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate));
+            border: 1px solid var(--glass-border);
+            box-shadow: var(--glass-shadow);
+            transition:
+                backdrop-filter var(--world-transition-speed) var(--world-transition-ease),
+                background var(--world-transition-speed) var(--world-transition-ease);
+        }
+
+        /* ════════════════════════════════════════
+         * CANVAS
+         * ════════════════════════════════════════ */
+        #engine-canvas {
+            position: fixed;
+            inset: 0;
+            width: 100vw;
+            height: 100vh;
+            background: #000;
+            z-index: var(--engine-z-canvas);
+        }
+
+        /* ════════════════════════════════════════
+         * SIDEBAR
+         * ════════════════════════════════════════ */
+        #sidebar {
+            position: fixed;
+            top: var(--world-sidebar-gap);
+            bottom: var(--world-sidebar-gap);
+            width: var(--world-sidebar-width);
+            z-index: var(--engine-z-sidebar);
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+            border-radius: var(--world-radius-lg);
+            left: var(--sidebar-pos-left);
+            right: var(--sidebar-pos-right);
+            border-left: var(--sidebar-border-left);
+            border-right: var(--sidebar-border-right);
+            border-top: 1px solid var(--glass-border);
+            border-bottom: 1px solid var(--glass-border);
+            box-shadow: var(--sidebar-shadow);
+        }
+
+        .sidebar-header {
+            flex-shrink: 0;
+            padding: 15px 18px 13px;
+            border-bottom: 1px solid var(--border-subtle);
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+            position: relative;
+        }
+
+        /* Prismatic accent line at top of header */
+        .sidebar-header::before {
+            content: "";
+            position: absolute;
+            top: 0;
+            left: 20%;
+            right: 20%;
+            height: 1px;
+            background: linear-gradient(90deg,
+                    transparent,
+                    var(--accent-glow-strong, rgba(56, 189, 248, 0.45)),
+                    transparent);
+            border-radius: 50%;
+        }
+
+        .sidebar-header-row {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+
+        .sidebar-title {
+            margin: 0;
+            font-size: 0.75rem;
+            font-weight: 700;
+            color: var(--accent-primary);
+            text-transform: uppercase;
+            letter-spacing: 0.18em;
+        }
+
+        .sidebar-subtitle {
+            margin: 0;
+            font-size: 0.625rem;
+            color: var(--text-muted);
+            letter-spacing: 0.02em;
+        }
+
+        .sidebar-body {
+            flex: 1;
+            overflow-y: auto;
+            padding: 10px 14px 0;
+            display: flex;
+            flex-direction: column;
+            gap: 0;
+            scrollbar-width: thin;
+            scrollbar-color: var(--border-subtle) transparent;
+        }
+
+        .sidebar-body::-webkit-scrollbar {
+            width: 3px;
+        }
+
+        .sidebar-body::-webkit-scrollbar-track {
+            background: transparent;
+        }
+
+        .sidebar-body::-webkit-scrollbar-thumb {
+            background: var(--border-subtle);
+            border-radius: 2px;
+        }
+
+        .sidebar-footer {
+            flex-shrink: 0;
+            padding: 9px 18px;
+            border-top: 1px solid var(--border-subtle);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            font-size: 0.5625rem;
+            color: var(--text-muted);
+            letter-spacing: 0.06em;
+            text-transform: uppercase;
+        }
+
+        .sidebar-footer a {
+            color: var(--text-muted);
+            text-decoration: none;
+            transition: color var(--world-transition-speed) var(--world-transition-ease);
+        }
+
+        .sidebar-footer a:hover {
+            color: var(--accent-primary);
+        }
+
+        /* ════════════════════════════════════════
+         * SECTION
+         * ════════════════════════════════════════ */
+        .section {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            padding: 11px 0;
+            border-bottom: 1px solid var(--border-subtle);
+        }
+
+        .section:last-child {
+            border-bottom: none;
+        }
+
+        .section-title {
+            font-size: 0.5625rem;
+            text-transform: uppercase;
+            letter-spacing: 0.14em;
+            color: var(--text-muted);
+            font-weight: 700;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .section-title::before {
+            content: "";
+            display: inline-block;
+            width: 12px;
+            height: 1px;
+            background: var(--accent-primary);
+            opacity: 0.45;
+            flex-shrink: 0;
+        }
+
+        /* ════════════════════════════════════════
+         * BUTTONS
+         * ════════════════════════════════════════ */
+        button {
+            font-family: var(--world-font-display);
+            background: rgba(255, 255, 255, 0.04);
+            color: var(--text-secondary);
+            border: 1px solid var(--border-subtle);
+            padding: 7px 12px;
+            border-radius: var(--world-radius-md);
+            font-size: 0.75rem;
+            font-weight: 500;
+            letter-spacing: 0.02em;
+            cursor: pointer;
+            transition:
+                background var(--world-transition-speed) var(--world-transition-ease),
+                border-color var(--world-transition-speed) var(--world-transition-ease),
+                color var(--world-transition-speed) var(--world-transition-ease),
+                box-shadow var(--world-transition-speed) var(--world-transition-ease),
+                transform var(--world-transition-speed) var(--world-transition-ease);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 6px;
+        }
+
+        button:hover {
+            background: rgba(255, 255, 255, 0.08);
+            border-color: var(--border-normal);
+            color: var(--text-primary);
+            transform: translateY(-1px);
+        }
+
+        button:active {
+            transform: scale(0.98);
+        }
+
+        button:disabled {
+            opacity: 0.35;
+            cursor: not-allowed;
+            pointer-events: none;
+        }
+
+        button.primary {
+            background: var(--accent-glow, rgba(56, 189, 248, 0.10));
+            border-color: var(--accent-border, rgba(56, 189, 248, 0.25));
+            color: var(--accent-primary);
+            box-shadow: 0 2px 12px var(--accent-glow, rgba(56, 189, 248, 0.08));
+        }
+
+        button.primary:hover {
+            background: var(--accent-glow-strong, rgba(56, 189, 248, 0.18));
+            border-color: var(--accent-primary);
+            box-shadow: 0 4px 20px var(--accent-glow-strong, rgba(56, 189, 248, 0.16));
+            color: var(--accent-primary);
+        }
+
+        button.danger {
+            background: rgba(220, 38, 38, 0.06);
+            border-color: rgba(220, 38, 38, 0.18);
+            color: var(--accent-danger);
+        }
+
+        button.danger:hover {
+            background: rgba(220, 38, 38, 0.13);
+            border-color: rgba(220, 38, 38, 0.35);
+            box-shadow: 0 4px 16px rgba(220, 38, 38, 0.10);
+            color: var(--accent-danger);
+        }
+
+        .button-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 5px;
+        }
+
+        /* ════════════════════════════════════════
+         * FORM INPUTS & SELECT
+         * ════════════════════════════════════════ */
+        input[type="email"],
+        input[type="text"],
+        select {
+            font-family: var(--world-font-display);
+            background: rgba(0, 0, 0, 0.22);
+            border: 1px solid var(--border-normal);
+            color: var(--text-primary);
+            padding: 8px 11px;
+            border-radius: var(--world-radius-md);
+            font-size: 0.8125rem;
+            outline: none;
+            width: 100%;
+            transition:
+                border-color var(--world-transition-speed) var(--world-transition-ease),
+                box-shadow var(--world-transition-speed) var(--world-transition-ease);
+            box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.16);
+        }
+
+        select {
+            appearance: none;
+            -webkit-appearance: none;
+            background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'%3E%3Cpath d='M1 1l4 4 4-4' stroke='rgba(255,255,255,0.35)' stroke-width='1.5' fill='none' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+            background-repeat: no-repeat;
+            background-position: right 11px center;
+            padding-right: 30px;
+            cursor: pointer;
+        }
+
+        select option {
+            background: #141720;
+            color: var(--text-primary);
+        }
+
+        input:focus,
+        select:focus {
+            border-color: var(--accent-primary);
+            box-shadow:
+                0 0 0 3px var(--accent-glow, rgba(56, 189, 248, 0.10)),
+                inset 0 1px 2px rgba(0, 0, 0, 0.16);
+        }
+
+        input::placeholder {
+            color: var(--text-muted);
+        }
+
+        /* ════════════════════════════════════════
+         * MODE BADGE
+         * ════════════════════════════════════════ */
+        .mode-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 5px;
+            font-size: 0.5rem;
+            font-family: var(--world-font-mono);
+            font-weight: 700;
+            letter-spacing: 0.14em;
+            padding: 3px 8px;
+            border-radius: var(--world-radius-sm);
+            border: 1px solid;
+            text-transform: uppercase;
+        }
+
+        .mode-badge::before {
+            content: '';
+            width: 5px;
+            height: 5px;
+            border-radius: 50%;
+            background: currentColor;
+            animation: pulse-dot 2.5s ease-in-out infinite;
+        }
+
+        @keyframes pulse-dot {
+
+            0%,
+            100% {
+                opacity: 1;
+            }
+
+            50% {
+                opacity: 0.2;
+            }
+        }
+
+        /* ════════════════════════════════════════
+         * STATS PANEL (Instrument Cluster)
+         * ════════════════════════════════════════ */
+        .stats-panel {
+            background: rgba(0, 0, 0, 0.18);
+            border: 1px solid var(--border-subtle);
+            border-radius: var(--world-radius-md);
+            padding: 9px 11px;
+            font-family: var(--world-font-mono);
+            display: flex;
+            flex-direction: column;
+            gap: 5px;
+        }
+
+        .stat {
+            display: flex;
+            justify-content: space-between;
+            align-items: baseline;
+            font-size: 0.6875rem;
+        }
+
+        .stat .label {
+            color: var(--text-muted);
+            font-size: 0.625rem;
+            letter-spacing: 0.04em;
+        }
+
+        .stat .value {
+            color: var(--accent-primary);
+            font-weight: 500;
+            font-variant-numeric: tabular-nums;
+        }
+
+        .stat-divider {
+            height: 1px;
+            background: var(--border-subtle);
+            margin: 2px 0;
+        }
+
+        /* ════════════════════════════════════════
+         * SEGMENTED CONTROL (Radio Group)
+         * ════════════════════════════════════════ */
+        .radio-container {
+            display: flex;
+            flex-direction: column;
+            gap: 5px;
+        }
+
+        .radio-label {
+            font-size: 0.5625rem;
+            text-transform: uppercase;
+            letter-spacing: 0.10em;
+            color: var(--text-muted);
+            font-weight: 600;
+        }
+
+        .radio-group {
+            display: flex;
+            background: rgba(0, 0, 0, 0.20);
+            border-radius: var(--world-radius-md);
+            padding: 2px;
+            border: 1px solid var(--border-subtle);
+            gap: 2px;
+        }
+
+        .radio-group label {
+            flex: 1;
+            text-align: center;
+            font-size: 0.6875rem;
+            font-weight: 600;
+            padding: 5px 8px;
+            cursor: pointer;
+            border-radius: 6px;
+            transition:
+                background var(--world-transition-speed) var(--world-transition-ease),
+                color var(--world-transition-speed) var(--world-transition-ease);
+            color: var(--text-muted);
+            user-select: none;
+            letter-spacing: 0.06em;
+        }
+
+        .radio-group input {
+            position: absolute;
+            opacity: 0;
+            width: 0;
+            height: 0;
+        }
+
+        .radio-group label:has(input:checked) {
+            background: var(--accent-glow, rgba(56, 189, 248, 0.14));
+            color: var(--accent-primary);
+            box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04);
+        }
+
+        .radio-group label:focus-within {
+            outline: 2px solid var(--accent-primary);
+            outline-offset: 1px;
+        }
+
+        .radio-group label:hover:not(:has(input:checked)) {
+            color: var(--text-primary);
+            background: rgba(255, 255, 255, 0.04);
+        }
+
+        /* ════════════════════════════════════════
+         * STATUS OUTPUT
+         * ════════════════════════════════════════ */
+        #status {
+            font-size: 0.5625rem;
+            font-family: var(--world-font-mono);
+            padding: 7px 10px;
+            background: rgba(0, 0, 0, 0.18);
+            border: 1px solid var(--border-subtle);
+            border-radius: var(--world-radius-md);
+            color: var(--text-muted);
+            word-break: break-all;
+            line-height: 1.6;
+            letter-spacing: 0.04em;
+        }
+
+        /* ════════════════════════════════════════
+         * SHORTCUT HELP OVERLAY
+         * ════════════════════════════════════════ */
+        #shortcut-overlay {
+            position: fixed;
+            inset: 0;
+            background: rgba(0, 0, 0, 0.65);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            display: none;
+            align-items: center;
+            justify-content: center;
+            z-index: var(--engine-z-modal);
+        }
+
+        .shortcut-modal {
+            width: min(460px, calc(100vw - 40px));
+            max-height: min(580px, calc(100vh - 40px));
+            border-radius: var(--world-radius-lg);
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+            box-shadow:
+                0 24px 64px rgba(0, 0, 0, 0.65),
+                inset 0 1px 0 rgba(255, 255, 255, 0.07);
+        }
+
+        .shortcut-modal-header {
+            padding: 13px 18px;
+            border-bottom: 1px solid var(--border-subtle);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            flex-shrink: 0;
+        }
+
+        .shortcut-modal-title {
+            font-size: 0.8125rem;
+            font-weight: 600;
+            color: var(--text-primary);
+            letter-spacing: 0.01em;
+        }
+
+        .shortcut-close-btn {
+            background: transparent;
+            border: none;
+            color: var(--text-muted);
+            font-size: 1rem;
+            width: 28px;
+            height: 28px;
+            padding: 0;
+            border-radius: var(--world-radius-sm);
+            box-shadow: none;
+        }
+
+        .shortcut-close-btn:hover {
+            background: rgba(255, 255, 255, 0.06);
+            color: var(--text-primary);
+            box-shadow: none;
+            transform: none;
+        }
+
+        .shortcut-modal-body {
+            flex: 1;
+            overflow-y: auto;
+            padding: 12px 18px;
+            display: flex;
+            flex-direction: column;
+            gap: 14px;
+            scrollbar-width: thin;
+            scrollbar-color: var(--border-normal) transparent;
+        }
+
+        .shortcut-group {
+            display: flex;
+            flex-direction: column;
+            gap: 5px;
+        }
+
+        .shortcut-group-title {
+            font-size: 0.5rem;
+            text-transform: uppercase;
+            letter-spacing: 0.14em;
+            color: var(--text-muted);
+            font-weight: 700;
+            padding-bottom: 5px;
+            border-bottom: 1px solid var(--border-subtle);
+        }
+
+        .shortcut-row {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            font-size: 0.8125rem;
+            padding: 2px 0;
+        }
+
+        .shortcut-label {
+            color: var(--text-secondary);
+        }
+
+        .shortcut-combo {
+            display: flex;
+            align-items: center;
+            gap: 3px;
+        }
+
+        kbd {
+            font-family: var(--world-font-mono);
+            font-size: 0.5625rem;
+            font-weight: 600;
+            padding: 2px 7px;
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid var(--border-normal);
+            border-radius: var(--world-radius-sm);
+            color: var(--accent-primary);
+            box-shadow: 0 1px 0 var(--border-subtle), inset 0 1px 0 rgba(255, 255, 255, 0.04);
+            letter-spacing: 0.04em;
+        }
+
+        .shortcut-modal-footer {
+            padding: 8px 18px;
+            border-top: 1px solid var(--border-subtle);
+            font-size: 0.5625rem;
+            color: var(--text-muted);
+            text-align: center;
+            flex-shrink: 0;
+            letter-spacing: 0.06em;
+        }
+
+        .shortcut-modal-footer kbd {
+            font-size: 0.5625rem;
+        }
+    </style>
+</head>
+
+<body>
+    <!-- ═══ Main Layout ═══ -->
+    <canvas id="engine-canvas" width="800" height="600"></canvas>
+
+    <!-- ═══ Sidebar ═══ -->
+    <aside id="sidebar" class="glass-panel" role="complementary" aria-label="Playground controls">
+
+        <div class="sidebar-header">
+            <div class="sidebar-header-row">
+                <h1 class="sidebar-title">Playground</h1>
+                <span id="mode-badge" class="mode-badge" role="status">SANDBOX</span>
+            </div>
+            <p class="sidebar-subtitle" id="playground-subtitle">Aetheris Engine — Local Sandbox</p>
+        </div>
+
+        <div class="sidebar-body">
+
+            <!-- Auth (Connected Mode only) -->
+            <div id="section-auth" class="section" style="display: none;">
+                <span class="section-title">Authentication</span>
+                <div style="display: flex; flex-direction: column; gap: 8px;">
+                    <input type="email" id="auth-email" placeholder="smoke-test@aetheris.dev"
+                        aria-label="Email address">
+                    <button class="primary" onclick="requestOtp()">Request Access Code</button>
+                    <div id="otp-entry"
+                        style="display: none; flex-direction: column; gap: 8px; margin-top: 6px; padding-top: 8px; border-top: 1px solid var(--border-subtle);">
+                        <input type="text" id="auth-otp" placeholder="000000" maxlength="6" inputmode="numeric"
+                            autocomplete="one-time-code" aria-label="6-digit OTP code"
+                            style="text-align: center; letter-spacing: 0.6em; font-weight: 600; font-family: var(--world-font-mono);">
+                        <button class="primary" onclick="login()">Verify &amp; Connect</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Interface Aesthetics -->
+            <div id="section-aesthetics" class="section">
+                <span class="section-title">Interface Aesthetics</span>
+                <div style="display: flex; flex-direction: column; gap: 8px;">
+                    <label for="theme-selector" style="font-size: 0.75rem; color: var(--text-secondary);">Active
+                        Theme</label>
+                    <select id="theme-selector" aria-label="Select interface theme">
+                        <!-- Populated by playground.ts -->
+                    </select>
+                </div>
+            </div>
+
+            <!-- Entity Spawner -->
+            <div id="section-entities" class="section">
+                <span class="section-title">Entity Spawner</span>
+                <div class="button-grid">
+                    <button onclick="spawn(1)">Interceptor</button>
+                    <button onclick="spawn(3)">Dreadnought</button>
+                    <button onclick="spawn(4)">Hauler</button>
+                    <button onclick="spawn(5)">Asteroid</button>
+                    <button onclick="spawn(6)">Projectile</button>
+                </div>
+            </div>
+
+            <!-- Simulation -->
+            <div id="section-simulation" class="section">
+                <span class="section-title">Simulation</span>
+                <div class="radio-container">
+                    <span class="radio-label">Element Rotation</span>
+                    <div class="radio-group" id="rotation-group" role="radiogroup" aria-label="Element rotation">
+                        <label>
+                            <input type="radio" name="rotation" value="true" onchange="toggleRotation(true)">
+                            ON
+                        </label>
+                        <label>
+                            <input type="radio" name="rotation" value="false" checked onchange="toggleRotation(false)">
+                            OFF
+                        </label>
+                    </div>
+                </div>
+                <button class="primary" onclick="stressTest(200)">Stress Test — 200 Units</button>
+                <button class="danger" onclick="clearWorld()">Clear World</button>
+            </div>
+
+            <!-- Telemetry -->
+            <div class="section">
+                <span class="section-title">Telemetry</span>
+                <div class="stats-panel" role="region" aria-label="Performance telemetry">
+                    <div class="stat">
+                        <span class="label">FPS (Host)</span>
+                        <span id="stat-fps" class="value">—</span>
+                    </div>
+                    <div class="stat">
+                        <span class="label">FPS (WASM)</span>
+                        <span id="stat-wasm-fps" class="value">—</span>
+                    </div>
+                    <div class="stat">
+                        <span class="label">Frame Time (p99)</span>
+                        <span id="stat-frame-time" class="value">—</span>
+                    </div>
+                    <div class="stat">
+                        <span class="label">Sim Time (p99)</span>
+                        <span id="stat-sim-time" class="value">—</span>
+                    </div>
+                    <div class="stat-divider"></div>
+                    <div class="stat">
+                        <span class="label">RTT</span>
+                        <span id="stat-rtt" class="value">n/a</span>
+                    </div>
+                    <div class="stat">
+                        <span class="label">Entities</span>
+                        <span id="stat-entities" class="value">0</span>
+                    </div>
+                    <div class="stat">
+                        <span class="label">Dropped</span>
+                        <span id="stat-dropped" class="value">0</span>
+                    </div>
+                    <div class="stat-divider"></div>
+                    <div class="stat">
+                        <span class="label">Session</span>
+                        <span id="stat-session" class="value">LOGGED OUT</span>
+                    </div>
+                    <div class="stat">
+                        <span class="label">SAB</span>
+                        <span id="stat-session-buffer" style="display:none"></span>
+                        <span id="stat-sab" class="value">IDLE</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- System -->
+            <div class="section">
+                <span class="section-title">System</span>
+                <div id="status" role="status" aria-live="polite">Initializing...</div>
+                <button id="btn-logout" class="danger" style="display: none;" onclick="logout()">
+                    Logout Session
+                </button>
+            </div>
+
+        </div><!-- /.sidebar-body -->
+
+        <div class="sidebar-footer">
+            <span>Aetheris Engine v0.1.0</span>
+            <a href="#" id="shortcuts-help-btn" title="Keyboard shortcuts (? or F1)">Shortcuts (?)</a>
+        </div>
+    </aside>
+
+    <!-- ═══ Shortcut Help Overlay ═══ -->
+    <div id="shortcut-overlay" role="dialog" aria-modal="true" aria-label="Keyboard shortcuts">
+        <!-- Content injected by ShortcutRegistry.renderOverlay() -->
+    </div>
+
+    <script type="module" src="/src/playground.ts"></script>
+    <script>
+        /* Global helpers for inline event handlers.
+         * Delegate to the AetherisPlayground instance once initialized. */
+        function spawn(type) { window.playground?.spawn(type); }
+        function toggleRotation(on) { window.playground?.toggleRotation(on); }
+        function stressTest(count) { window.playground?.stressTest(count); }
+        function clearWorld() { window.playground?.clear(); }
+        function requestOtp() { window.playground?.requestOtp(document.getElementById('auth-email').value); }
+        function login() { window.playground?.login(document.getElementById('auth-otp').value); }
+        function logout() { window.playground?.logout(); }
+    </script>
+</body>
+
+</html>

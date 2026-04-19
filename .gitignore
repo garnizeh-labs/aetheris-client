@@ -23,3 +23,7 @@ node_modules/
 pkg/
 crates/aetheris-client-wasm/target/dev-certs/
 /benches/baseline.local.json
+
+# --- Playground ---
+playground/node_modules/
+playground/dist/
