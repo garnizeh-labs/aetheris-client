@@ -531,7 +531,7 @@ impl InputSchemaRegistry {
 
 ### 6.1 Validation Layers
 
-Input validation is layered identically to the engine's four-layer security model (see [SECURITY_DESIGN.md](SECURITY_DESIGN.md)):
+Input validation is layered identically to the engine's four-layer security model (see SECURITY_DESIGN.md in the nexus repo):
 
 | Layer | Where | Cost | Checks |
 |---|---|---|---|
