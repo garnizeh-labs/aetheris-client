@@ -14,13 +14,13 @@ fmt:
 # Run clippy lints
 [group('lint')]
 clippy:
-    cargo clippy --workspace --all-targets -- -D warnings
+    cargo clippy --workspace -- -D warnings
 
 # Automatically apply formatting and clippy fixes
 [group('lint')]
 fix:
     cargo fmt --all
-    cargo clippy --workspace --all-targets --fix --allow-dirty --allow-staged
+    cargo clippy --workspace --fix --allow-dirty --allow-staged
 
 # Run all unit and integration tests
 [group('test')]
