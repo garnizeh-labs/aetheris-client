@@ -62,7 +62,7 @@ impl GameTransport for MockTransport {
     async fn poll_events(&mut self) -> Result<Vec<NetworkEvent>, TransportError> {
         let mut events: Vec<NetworkEvent> = self.inbound_events.lock().unwrap().drain(..).collect();
         if *self.is_closed.lock().unwrap() {
-            events.push(NetworkEvent::Disconnected);
+            events.push(NetworkEvent::Disconnected(ClientId(0)));
         }
         Ok(events)
     }
