@@ -4,7 +4,7 @@ Status: Phase 1 — MVP / Phase 3 — Extensible
 Phase: P1 | P3
 Last Updated: 2026-04-16
 Authors: Team (Antigravity)
-Spec References: [ENGINE_DESIGN, PROTOCOL_DESIGN, CLIENT_DESIGN, SECURITY_DESIGN, INTEGRATION_DESIGN, NEXUS_PLATFORM_DESIGN]
+Spec References: [ENGINE_DESIGN, PROTOCOL_DESIGN, CLIENT_DESIGN, SECURITY_DESIGN, INTEGRATION_DESIGN]
 Tier: 3
 ---
 
@@ -81,7 +81,7 @@ The current `InputCommand` struct is hardcoded across multiple subsystems:
 | SECURITY_DESIGN §10 | Validation rules reference `InputCommand` fields directly |
 | INTEGRATION_DESIGN §7 | Full sequence diagram uses `InputCommand` as the wire type |
 
-Replacing or extending `InputCommand` requires modifying all of these. A Nexus application cannot add a `TextEdit` input type without forking the client pipeline.
+Replacing or extending `InputCommand` requires modifying all of these. An extended application cannot add a `TextEdit` input type without forking the client pipeline.
 
 ### 2.2 The Solution
 
@@ -186,10 +186,10 @@ impl InputSchema for GameInput {
 }
 ```
 
-### 3.3 Nexus Input Schemas
+### 3.3 Platform Input Schemas
 
 ```rust
-/// Nexus — collaborative text editing input.
+/// Platform — collaborative text editing input.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct TextEditInput {
     pub client_tick: u64,
@@ -239,7 +239,7 @@ impl InputSchema for TextEditInput {
     fn schema_name(&self) -> &'static str { "text-edit" }
 }
 
-/// Nexus — trade/bet order input.
+/// Platform — trade/bet order input.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct TradeOrderInput {
     pub client_tick: u64,
@@ -407,18 +407,18 @@ impl InputMapper for VoidRushInputMapper {
 
 ### 4.3 Multiple Input Schemas Per Application
 
-A Nexus application may produce multiple input types simultaneously (e.g., avatar movement + text edits):
+An extended application may produce multiple input types simultaneously (e.g., avatar movement + text edits):
 
 ```rust
-/// Nexus Corporate — multiple input schemas active simultaneously.
+/// Extended Corporate — multiple input schemas active simultaneously.
 /// The Game Worker maintains one InputMapper per active schema.
-pub struct NexusCorporateInputRouter {
+pub struct ExtendedCorporateInputRouter {
     avatar_mapper: AvatarInputMapper,     // → AvatarInput (movement, emotes)
     text_mapper: Option<TextEditMapper>,   // → TextEditInput (active when editor open)
     voice_mapper: Option<VoiceInputMapper>, // → VoiceFrame (active when in call)
 }
 
-impl NexusCorporateInputRouter {
+impl ExtendedCorporateInputRouter {
     pub fn map(&mut self, event: &RawInputEvent, tick: u64) -> SmallVec<[AnyInput; 4]> {
         let mut inputs = SmallVec::new();
 
@@ -531,7 +531,7 @@ impl InputSchemaRegistry {
 
 ### 6.1 Validation Layers
 
-Input validation is layered identically to the engine's four-layer security model (see SECURITY_DESIGN.md in the nexus repo):
+Input validation is layered identically to the engine's four-layer security model (see internal SECURITY_DESIGN.md):
 
 | Layer | Where | Cost | Checks |
 |---|---|---|---|
@@ -719,10 +719,10 @@ impl<I: InputSchema> InputHistoryBuffer<I> {
 
 ### 8.2 Multiple Active Histories
 
-A Nexus client with multiple active input schemas maintains one history buffer per predictable schema:
+A Platform client with multiple active input schemas maintains one history buffer per predictable schema:
 
 ```rust
-pub struct NexusInputHistories {
+pub struct ExtendedInputHistories {
     avatar: InputHistoryBuffer<AvatarInput>,
     text_edit: InputHistoryBuffer<TextEditInput>,
     // TradeOrderInput has no history — not predictable
@@ -737,7 +737,7 @@ pub struct NexusInputHistories {
 |---|---|---|
 | **P1 (MVP)** | `GameInput` implements `InputSchema` | Zero behavioral change from current implementation. The trait exists, but only one schema is registered. |
 | **P2 (Stress)** | Add `InputSchemaRegistry` | Support multiple schema types on the wire. Schema discriminant byte in packet header. |
-| **P3 (Platform)** | `#[derive(InputSchema)]` macro | Compile-time derivation of encode/decode/validate for custom schemas. Nexus SDK provides domain schemas. |
+| **P3 (Platform)** | `#[derive(InputSchema)]` macro | Compile-time derivation of encode/decode/validate for custom schemas. Platform SDK provides domain schemas. |
 
 ### 9.1 Migration Path
 
@@ -755,7 +755,7 @@ No protocol break. No client rewrite.
 
 | # | Question | Context | Status |
 |---|---|---|---|
-| Q1 | **Transform/CRDT for text edits** | `TextEditInput` assumes server is always right (last-write-wins). True collaborative editing needs Operational Transform or CRDT. Should this be an ECS system or a sidecar service? | Open — P3 research. Noted in [NEXUS_PLATFORM_DESIGN.md](https://github.com/garnizeh-labs/nexus/blob/main/docs/NEXUS_PLATFORM_DESIGN.md) Q2. |
+| Q1 | **Transform/CRDT for text edits** | `TextEditInput` assumes server is always right (last-write-wins). True collaborative editing needs Operational Transform or CRDT. Should this be an ECS system or a sidecar service? | Open — P3 research. Noted in internal design documentation. |
 | Q2 | **Input compression** | Should the engine provide delta-encoding for sequential inputs (e.g., only changed fields)? | Deferred to P3. Measure bandwidth first. |
 | Q3 | **Input prediction for text edits** | Local optimistic insert is trivial, but conflict resolution with concurrent editors is not. Define reconciliation semantics. | Open — depends on Q1 (Transform/CRDT). |
 | Q4 | **Schema versioning** | When a schema changes (new field), how do old clients interoperate? | Handled by MIGRATION_DESIGN.md protocol versioning (1-byte version header, 3-release deprecation). |

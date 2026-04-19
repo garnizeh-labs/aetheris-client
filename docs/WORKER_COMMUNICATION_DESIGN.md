@@ -4,7 +4,7 @@ Status: Phase 1 — MVP / Phase 3 — Extensible
 Phase: P1 | P3
 Last Updated: 2026-04-16
 Authors: Team (Antigravity)
-Spec References: [ENGINE_DESIGN, CLIENT_DESIGN, API_DESIGN, VOID_RUSH_GDD, NEXUS_PLATFORM_DESIGN]
+Spec References: [ENGINE_DESIGN, CLIENT_DESIGN, API_DESIGN, VOID_RUSH_GDD]
 Tier: 3
 ---
 
@@ -24,10 +24,10 @@ This document is the **canonical source** for:
 - The SAB memory layout and double-buffer flip-bit protocol.
 - The `EntityDisplayState` repr(C) struct and its wire format.
 - The postMessage topic/payload protocol.
-- SAB extensibility rules for non-game applications (Nexus platform).
+- SAB extensibility rules for non-game applications (Extended Platform).
 - Security requirements (cross-origin isolation for Spectre mitigation).
 
-It consolidates fragments previously scattered across [CLIENT_DESIGN.md](CLIENT_DESIGN.md) §6, [API_DESIGN.md](https://github.com/garnizeh-labs/aetheris-protocol/blob/main/docs/API_DESIGN.md) §9, [VOID_RUSH_GDD.md](https://github.com/garnizeh-labs/void-rush/blob/main/docs/VOID_RUSH_GDD.md) §12.2, and [NEXUS_PLATFORM_DESIGN.md](https://github.com/garnizeh-labs/nexus/blob/main/docs/NEXUS_PLATFORM_DESIGN.md) §3.2–3.4.
+It consolidates fragments previously scattered across [CLIENT_DESIGN.md](CLIENT_DESIGN.md) §6, [API_DESIGN.md](https://github.com/garnizeh-labs/aetheris-protocol/blob/main/docs/API_DESIGN.md) §9, [VOID_RUSH_GDD.md](https://github.com/garnizeh-labs/void-rush/blob/main/docs/VOID_RUSH_GDD.md) §12.2.
 
 ### Design Principle
 
@@ -69,10 +69,10 @@ This document is the **canonical source** for:
 - The SAB memory layout and double-buffer flip-bit protocol.
 - The `EntityDisplayState` repr(C) struct and its wire format.
 - The postMessage topic/payload protocol.
-- SAB extensibility rules for non-game applications (Nexus platform).
+- SAB extensibility rules for non-game applications (Extended Platform).
 - Security requirements (cross-origin isolation for Spectre mitigation).
 
-It consolidates fragments previously scattered across [CLIENT_DESIGN.md](CLIENT_DESIGN.md) §6, [API_DESIGN.md](https://github.com/garnizeh-labs/aetheris-protocol/blob/main/docs/API_DESIGN.md) §9, [VOID_RUSH_GDD.md](https://github.com/garnizeh-labs/void-rush/blob/main/docs/VOID_RUSH_GDD.md) §12.2, and [NEXUS_PLATFORM_DESIGN.md](https://github.com/garnizeh-labs/nexus/blob/main/docs/NEXUS_PLATFORM_DESIGN.md) §3.2–3.4.
+It consolidates fragments previously scattered across [CLIENT_DESIGN.md](CLIENT_DESIGN.md) §6, [API_DESIGN.md](https://github.com/garnizeh-labs/aetheris-protocol/blob/main/docs/API_DESIGN.md) §9, [VOID_RUSH_GDD.md](https://github.com/garnizeh-labs/void-rush/blob/main/docs/VOID_RUSH_GDD.md) §12.2.
 
 ### Design Principle
 
@@ -91,7 +91,7 @@ It consolidates fragments previously scattered across [CLIENT_DESIGN.md](CLIENT_
 │  • HTML/CSS HUD, React/Vue overlays  │
 │  • Input event listeners (keyboard,  │
 │    mouse, touch, text)               │
-│  • Nexus UI Bridge (reads SAB)       │
+│  • Platform UI Bridge (reads SAB)       │
 │  • OffscreenCanvas element holder    │
 └────────┬──────────────────┬──────────┘
          │ postMessage       │ canvas.transferControlToOffscreen()
@@ -273,7 +273,7 @@ interface WorkerMessage {
 | `'mouse_move'` | `{ dx: number, dy: number }` | Raw mouse delta |
 | `'mouse_down'` | `{ button: number }` | Raw mouse button event |
 | `'mouse_up'` | `{ button: number }` | Raw mouse button event |
-| `'command'` | `NexusCommand` | Nexus UI command (text edit, trade order, quiz answer) |
+| `'command'` | `PlatformCommand` | Platform UI command (text edit, trade order, quiz answer) |
 | `'resize'` | `{ width: number, height: number }` | Viewport resize notification |
 
 ### 5.3 Game Worker → Main Thread Messages
@@ -284,8 +284,8 @@ interface WorkerMessage {
 | `'connection_error'` | `{ reason: string }` | WebTransport connection failure |
 | `'connection_ready'` | `{ clientId: string, tick: number }` | Connection established, handshake complete |
 | `'game_event'` | `{ event: string, data: any }` | Death, level-up, achievement, score change |
-| `'document_update'` | `{ docId: string, ops: any[] }` | Nexus: collaborative document changes |
-| `'trade_fill'` | `{ orderId: string, price: number, qty: number }` | Nexus: trade execution confirmation |
+| `'document_update'` | `{ docId: string, ops: any[] }` | Platform: collaborative document changes |
+| `'trade_fill'` | `{ orderId: string, price: number, qty: number }` | Platform: trade execution confirmation |
 | `'room_event'` | `{ type: string, roomId: string, ... }` | Room entry/exit/lock/unlock notifications |
 | `'error'` | `{ code: string, message: string }` | Generic error from WASM |
 
@@ -425,7 +425,7 @@ pub struct SabConfig {
     /// Void Rush override: 8192.
     pub max_entities: usize,
 
-    /// Additional regions beyond entity transforms (Nexus platform).
+    /// Additional regions beyond entity transforms (Extended Platform).
     /// Engine default: empty (game-only SAB).
     pub additional_regions: Vec<SabRegion>,
 }
@@ -447,7 +447,7 @@ impl Default for SabConfig {
 |---|---|---|---|---|---|---|
 | Engine Default | 60 B | 4,096 | 16 B | 240 KiB | 240 KiB | **480 KiB** |
 | Void Rush | 48 B | 8,192 | 16 B | 384 KiB | 384 KiB | **768 KiB** |
-| Nexus Platform | 60 B | 560 | 16 B | 33 KiB × 2 + Regions | — | **64 KiB** (see §8) |
+| Extended Platform | 60 B | 560 | 16 B | 33 KiB × 2 + Regions | — | **64 KiB** (see §8) |
 
 All configurations fit comfortably in L2 cache (typically 256 KiB – 1 MiB per core).
 
@@ -455,12 +455,12 @@ All configurations fit comfortably in L2 cache (typically 256 KiB – 1 MiB per 
 
 ## 8. SAB Memory Layout — Extensibility
 
-### 8.1 Nexus Platform Extended Layout
+### 8.1 Aetheris Platform Extended Layout
 
-Non-game applications need SAB regions beyond entity transforms. The Nexus platform defines five regions within a 64 KiB SAB:
+Non-game applications need SAB regions beyond entity transforms. The Aetheris platform defines five regions within a 64 KiB SAB:
 
 ```
-SharedArrayBuffer (Nexus Configuration — 64 KiB):
+SharedArrayBuffer (Aetheris Configuration — 64 KiB):
 
 Offset     Region   Purpose                         Slot Size   Max Slots   Reader
 ─────────────────────────────────────────────────────────────────────────────────────
@@ -484,7 +484,7 @@ Offset     Region   Purpose                         Slot Size   Max Slots   Read
 | `rotation` (w,x,y,z) | `[f32; 4]` | 16 B |
 | **Total** | | **36 B** |
 
-Nexus drops `velocity`, `health_normalized`, `animation_id`, and `flags` — metaverse avatars use animation systems driven by postMessage events, not per-tick SAB data.
+Platform drops `velocity`, `health_normalized`, `animation_id`, and `flags` — metaverse avatars use animation systems driven by postMessage events, not per-tick SAB data.
 
 **Region B — Cursor Positions** (Main Thread reads for editor overlays)
 
@@ -530,7 +530,7 @@ Applications register Region E sub-regions via `SabConfig::additional_regions`.
 
 ```rust
 let config = SabConfig {
-    entity_slot_size: 36, // Nexus compact
+    entity_slot_size: 36, // Platform compact
     max_entities: 560,
     additional_regions: vec![
         SabRegion {
@@ -626,7 +626,7 @@ export function readEntityTransforms(sab: SharedArrayBuffer, maxEntities: number
 }
 ```
 
-### 9.2 Nexus UI Bridge — Cursor Reader (Main Thread)
+### 9.2 Platform UI Bridge — Cursor Reader (Main Thread)
 
 ```typescript
 const CURSOR_REGION_OFFSET = 0x5000;
@@ -657,7 +657,7 @@ export function readCursors(sab: SharedArrayBuffer): CursorState[] {
 }
 ```
 
-### 9.3 Nexus UI Bridge — Ticker Reader (Main Thread)
+### 9.3 Platform UI Bridge — Ticker Reader (Main Thread)
 
 ```typescript
 const TICKER_REGION_OFFSET = 0x7000;
@@ -792,7 +792,7 @@ Within the Game Worker's 16.6 ms tick budget:
 |---|---|---|
 | SAB (game default) | 480 KiB | 4,096 entities × 60 B × 2 buffers |
 | SAB (Void Rush) | 768 KiB | 8,192 entities × 48 B × 2 buffers |
-| SAB (Nexus) | 64 KiB | Compact transforms + specialized regions |
+| SAB (Extended) | 64 KiB | Compact transforms + specialized regions |
 | WASM heap (Game Worker) | ~4–8 MiB | Client ECS, transport buffers, input history |
 | GPU buffers (Render Worker) | ~16–64 MiB | Vertex/index/texture — managed by wgpu |
 
@@ -837,5 +837,5 @@ Within the Game Worker's 16.6 ms tick budget:
 | WC3 | Double-buffer with Atomics flip bit (not triple-buffer) | Double-buffer is simpler and sufficient at 60 Hz write / 60–144 Hz read. Triple-buffer adds complexity for marginal benefit. | Reader frame rate >> writer tick rate (e.g., 240 Hz display + 20 Hz server). Triple-buffer prevents reader from re-reading the same frame. | 2026-04-16 |
 | WC4 | `repr(C) + Pod` for EntityDisplayState | Must be safe to interpret as raw bytes across WASM and JavaScript boundaries. No padding ambiguity, no pointers. | Need variable-length entity data (strings, arrays). Would require a length-prefixed format instead. | 2026-04-16 |
 | WC5 | No direct Game Worker → Render Worker MessagePort | Keeps topology simple (star with Main Thread as hub for events). All high-frequency data goes through SAB anyway. | Frequent one-off events from Game Worker to Render Worker (e.g., particle spawn triggers). Add a dedicated MessagePort. | 2026-04-16 |
-| WC6 | SAB layout is application-configurable via SabConfig | Games need different layouts than corporate platforms. Fixed layout would force Nexus to waste space on game fields (health, animation_id) or vice versa. | Configuration complexity becomes a pain point. Provide 3 preset profiles (Game, Nexus, Minimal) and disallow custom. | 2026-04-16 |
+| WC6 | SAB layout is application-configurable via SabConfig | Games need different layouts than corporate platforms. Fixed layout would force Platform to waste space on game fields (health, animation_id) or vice versa. | Configuration complexity becomes a pain point. Provide 3 preset profiles (Game, Platform, Minimal) and disallow custom. | 2026-04-16 |
 | WC7 | Fallback to postMessage + Transferable when SAB unavailable | Some environments (non-isolated pages, older browsers) lack SAB. Graceful degradation is better than hard failure. | SAB support reaches 100% of target browsers. Remove fallback to simplify code. | 2026-04-16 |

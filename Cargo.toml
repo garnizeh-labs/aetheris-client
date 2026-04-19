@@ -34,6 +34,7 @@ rand = "0.10.1"
 ulid = { version = "1.2.1", default-features = false }
 base64 = "0.22.1"
 anyhow = "1.0.95"
+dashmap = "6.1.0"
 
 # gRPC / Protobuf (WASM-compatible subset — no tonic::transport)
 tonic = { version = "0.14.3", default-features = false, features = ["codegen"] }
@@ -72,3 +73,8 @@ lto = true        # Link-time optimization
 strip = "symbols" # Remove symbols
 panic = "abort"   # Save ~50KB per WASM bin
 codegen-units = 1 # Better LTO
+
+# [patch.crates-io]
+# aetheris-protocol = { path = "../aetheris-protocol/crates/aetheris-protocol" }
+# aetheris-encoder-serde = { path = "../aetheris-protocol/crates/aetheris-encoder-serde" }
+# aetheris-encoder-bitpack = { path = "../aetheris-protocol/crates/aetheris-encoder-bitpack" }

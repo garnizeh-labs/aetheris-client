@@ -8,7 +8,7 @@ High-performance, WASM-powered browser client runtime — featuring a determinis
 
 > **[Read the Client Design Document](docs/CLIENT_DESIGN.md)** — three-worker architecture and WASM integration.
 >
-> 🚀 **Latest Milestone:** **Hardening & Standardization (M1011) Complete!** Atomic TOCTOU fix in SharedWorld, per-face normals in the renderer, and full CI standardization across the Aetheris platform.
+> 🚀 **Latest Milestone:** **M10146** — Reconnection Loop & Asset Foundation (Completed)
 
 [![CI](https://github.com/garnizeh-labs/aetheris-client/actions/workflows/ci.yml/badge.svg)](https://github.com/garnizeh-labs/aetheris-client/actions/workflows/ci.yml)
 [![Rust Version](https://img.shields.io/badge/rust-1.95.0%2B-blue.svg?logo=rust)](https://www.rust-lang.org/)

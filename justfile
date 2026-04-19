@@ -11,6 +11,16 @@ check-all: check wasm docs-strict udeps
 fmt:
     cargo fmt --all --check
 
+# Link to local aetheris-protocol for development
+[group('dev')]
+link-dev:
+    python3 scripts/dev_toggle.py --enable --path Cargo.toml
+
+# Unlink local aetheris-protocol (switch back to crates.io)
+[group('dev')]
+unlink-dev:
+    python3 scripts/dev_toggle.py --disable --path Cargo.toml
+
 # Run clippy lints
 [group('lint')]
 clippy:
@@ -38,11 +48,12 @@ security:
 docs:
     cargo doc --workspace --no-deps
 
-# Check documentation quality (linting, frontmatter, spelling, links)
+# Check documentation quality (linting, frontmatter, spelling, links, branding)
 [group('doc')]
 docs-check:
     python3 scripts/doc_lint.py
     python3 scripts/check_links.py
+    python3 scripts/check_branding.py
     codespell
 
 # Build documentation (mirrors the CI job — warnings are errors)
