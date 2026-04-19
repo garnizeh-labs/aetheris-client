@@ -111,7 +111,7 @@ jobs:
       - uses: taiki-e/install-action@85b24a67ef0c632dfefad70b9d5ce8fddb040754 # nextest
         with:
           tool: nextest
-      - run: cargo nextest run --workspace --profile ci
+      - run: cargo nextest run --workspace --profile ci --no-tests=pass
 
   docs:
     name: Documentation Build

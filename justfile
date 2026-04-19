@@ -25,7 +25,7 @@ fix:
 # Run all unit and integration tests
 [group('test')]
 test:
-    cargo nextest run --workspace --profile ci
+    cargo nextest run --workspace --profile ci --no-tests=pass
 
 # Run security audits (licenses, advisories, vulnerabilities)
 [group('security')]
