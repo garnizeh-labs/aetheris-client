@@ -1,6 +1,5 @@
 use crate::render_primitives::MeshData;
 use dashmap::DashMap;
-use std::io::Read;
 use std::sync::Arc;
 #[cfg(target_arch = "wasm32")]
 use wasm_bindgen::prelude::*;

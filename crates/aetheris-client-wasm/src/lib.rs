@@ -547,7 +547,7 @@ mod wasm_impl {
         /// Simulation tick called by the Network Worker at a fixed rate (e.g. 20Hz).
         pub async fn tick(&mut self) {
             self.check_worker();
-            use aetheris_protocol::traits::{Encoder, GameTransport, WorldState};
+            use aetheris_protocol::traits::{Encoder, WorldState};
 
             let encoder = SerdeEncoder::new();
 
@@ -601,7 +601,7 @@ mod wasm_impl {
                         NetworkEvent::ClientDisconnected(id) => {
                             tracing::warn!(?id, "Server disconnected");
                         }
-                        NetworkEvent::Disconnected => {
+                        NetworkEvent::Disconnected(_id) => {
                             tracing::error!("Transport disconnected locally");
                             self.connection_state = ConnectionState::Disconnected;
                         }
@@ -645,7 +645,7 @@ mod wasm_impl {
                             client_id,
                             fragment,
                         } => {
-                            if let Some(data) = self.reassembler.add(client_id, fragment) {
+                            if let Some(data) = self.reassembler.ingest(client_id, fragment) {
                                 if let Ok(update) = encoder.decode(&data) {
                                     updates.push((client_id, update));
                                 }

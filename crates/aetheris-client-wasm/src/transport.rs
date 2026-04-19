@@ -330,7 +330,7 @@ impl GameTransport for WebTransportBridge {
         let mut events: Vec<NetworkEvent> = q.drain(..).collect();
 
         if self.is_closed() {
-            events.push(NetworkEvent::Disconnected);
+            events.push(NetworkEvent::Disconnected(ClientId(0)));
         }
 
         Ok(events)
