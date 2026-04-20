@@ -28,7 +28,7 @@
 | Crate | Link | Documentation |
 | :--- | :--- | :--- |
 | **`aetheris-client-wasm`** | [![Crates.io](https://img.shields.io/crates/v/aetheris-client-wasm?style=flat-square)](https://crates.io/crates/aetheris-client-wasm) | [![Docs.rs](https://img.shields.io/docsrs/aetheris-client-wasm?style=flat-square&logo=docs.rs&label=docs)](https://docs.rs/aetheris-client-wasm) |
-| **`aetheris-client-native`** | [![Crates.io](https://img.shields.io/crates/v/aetheris-client-native?style=flat-square)](https://crates.io/crates/aetheris-client-native) | [![Docs.rs](https://img.shields.io/docsrs/aetheris-client-native?style=flat-square&logo=docs.rs&label=docs)](https://docs.rs/aetheris-client-native) |
+| **`aetheris-client-native`** | [![Crates.io](https://img.shields.io/crates/v/aetheris-client-native?style=flat-square)](https://crates.io/crates/aetheris-client-native) | — |
 
 ---
 
