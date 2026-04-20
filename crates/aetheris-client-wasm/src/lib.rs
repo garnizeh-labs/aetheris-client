@@ -567,9 +567,7 @@ mod wasm_impl {
                         client_id: ClientId(0), // Client doesn't know its ID yet usually
                         tick: tick_u64,
                     }) {
-                        web_sys::console::debug_1(
-                            &format!("[Aetheris] Sending Ping: tick={tick_u64}").into(),
-                        );
+                        tracing::trace!(tick = tick_u64, "Sending Ping");
                         let _ = transport.send_unreliable(ClientId(0), &data).await;
                     }
                 }
@@ -591,8 +589,19 @@ mod wasm_impl {
                     match event {
                         NetworkEvent::UnreliableMessage { data, client_id }
                         | NetworkEvent::ReliableMessage { data, client_id } => {
-                            if let Ok(update) = encoder.decode(&data) {
-                                updates.push((client_id, update));
+                            match encoder.decode(&data) {
+                                Ok(update) => {
+                                    tracing::debug!(
+                                        network_id = update.network_id.0,
+                                        kind = update.component_kind.0,
+                                        tick = update.tick,
+                                        "Decoded component update"
+                                    );
+                                    updates.push((client_id, update));
+                                }
+                                Err(e) => {
+                                    tracing::warn!(error = ?e, "Failed to decode server message");
+                                }
                             }
                         }
                         NetworkEvent::ClientConnected(id) => {
@@ -625,11 +634,7 @@ mod wasm_impl {
                             #[cfg(feature = "metrics")]
                             metrics::gauge!("aetheris_client_rtt_ms").set(rtt);
 
-                            web_sys::console::debug_1(
-                                &format!("[Aetheris] Received Pong: tick={tick} RTT={rtt:.1}ms")
-                                    .into(),
-                            );
-                            tracing::debug!(rtt_ms = rtt, "RTT Update");
+                            tracing::trace!(rtt_ms = rtt, tick, "Received Pong / RTT update");
                         }
                         NetworkEvent::Auth { .. } => {
                             // Client initiated event usually, ignore if received from server
@@ -666,6 +671,9 @@ mod wasm_impl {
                 }
 
                 // 2. Apply updates to the Simulation World
+                if !updates.is_empty() {
+                    tracing::debug!(count = updates.len(), "Applying server updates to world");
+                }
                 self.world_state.apply_updates(&updates);
             }
 
@@ -680,8 +688,18 @@ mod wasm_impl {
             // even when the server sends no updates (static entities, client-side animation).
             self.world_state.latest_tick += 1;
 
+            // M10105 — measure simulation time
+            let sim_start = crate::performance_now();
+
             // 3. Write Authoritative Snapshot to Shared World for the Render Worker
             self.flush_to_shared_world(self.world_state.latest_tick);
+
+            let sim_time_ms = crate::performance_now() - sim_start;
+            let count = self.world_state.entities.len() as u32;
+            with_collector(|c| {
+                c.record_sim(sim_time_ms);
+                c.update_entity_count(count);
+            });
         }
 
         fn flush_to_shared_world(&mut self, tick: u64) {
@@ -698,6 +716,7 @@ mod wasm_impl {
                 count += 1;
             }
 
+            tracing::debug!(entity_count = count, tick, "Flushed world to SAB");
             self.shared_world.commit_write(count as u32, tick);
         }
 

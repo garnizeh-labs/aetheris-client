@@ -11,7 +11,7 @@ use wasm_bindgen::prelude::*;
 use wasm_bindgen_futures::JsFuture;
 use web_sys::{
     ReadableStreamDefaultReader, WebTransport, WebTransportBidirectionalStream,
-    WebTransportOptions, WebTransportSendStream, WritableStream, WritableStreamDefaultWriter,
+    WebTransportOptions, WritableStreamDefaultWriter,
 };
 
 use std::collections::VecDeque;
@@ -275,27 +275,25 @@ impl GameTransport for WebTransportBridge {
     async fn send_reliable(&self, _client_id: ClientId, data: &[u8]) -> Result<(), TransportError> {
         self.check_worker();
 
-        // A unidirectional send stream is sufficient for client→server data; using a
-        // bidirectional stream wastes the unused readable half.
-        let send_stream: WebTransportSendStream =
-            JsFuture::from(self.transport.create_unidirectional_stream())
+        // Use a bidirectional stream so the server's accept_bi() loop receives
+        // the data. The readable half is unused but required by the server API.
+        let bi_stream: WebTransportBidirectionalStream =
+            JsFuture::from(self.transport.create_bidirectional_stream())
                 .await
                 .map_err(|e| {
                     TransportError::Io(std::io::Error::other(format!(
-                        "Failed to create unidirectional stream: {e:?}"
+                        "Failed to create bidirectional stream: {e:?}"
                     )))
                 })?
                 .unchecked_into();
 
-        // WebTransportSendStream extends WritableStream; cast to access get_writer().
-        let writer: WritableStreamDefaultWriter = send_stream
-            .unchecked_ref::<WritableStream>()
-            .get_writer()
-            .map_err(|e| {
-                TransportError::Io(std::io::Error::other(format!(
-                    "Failed to get stream writer: {e:?}"
-                )))
-            })?;
+        // Write data to the writable half of the bidirectional stream.
+        let writable = bi_stream.writable();
+        let writer: WritableStreamDefaultWriter = writable.get_writer().map_err(|e| {
+            TransportError::Io(std::io::Error::other(format!(
+                "Failed to get stream writer: {e:?}"
+            )))
+        })?;
 
         let uint8 = Uint8Array::from(data);
         JsFuture::from(writer.write_with_chunk(&uint8))
