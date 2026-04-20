@@ -34,11 +34,17 @@ pub mod auth_proto {
 #[cfg(target_arch = "wasm32")]
 pub mod transport;
 
+#[cfg(test)]
+pub mod transport_mock;
+
 #[cfg(target_arch = "wasm32")]
 pub mod render;
 
-#[cfg(target_arch = "wasm32")]
+#[cfg(any(target_arch = "wasm32", test))]
 pub mod render_primitives;
+
+#[cfg(any(target_arch = "wasm32", test))]
+pub mod assets;
 
 #[cfg(target_arch = "wasm32")]
 #[cfg_attr(feature = "nightly", thread_local)]
@@ -97,6 +103,7 @@ pub(crate) fn get_worker_id() -> usize {
 
 #[cfg(target_arch = "wasm32")]
 mod wasm_impl {
+    use crate::assets;
     use crate::metrics::with_collector;
     use crate::performance_now;
     use crate::render::RenderState;
@@ -132,7 +139,7 @@ mod wasm_impl {
         shared_world: SharedWorld,
         world_state: ClientWorld,
         render_state: Option<RenderState>,
-        transport: Option<WebTransportBridge>,
+        transport: Option<Box<dyn GameTransport>>,
         worker_id: usize,
         session_token: Option<String>,
 
@@ -152,6 +159,8 @@ mod wasm_impl {
 
         // Reusable buffer for zero-allocation rendering (Render Worker only)
         render_buffer: Vec<SabSlot>,
+
+        asset_registry: assets::AssetRegistry,
     }
 
     #[wasm_bindgen]
@@ -225,6 +234,7 @@ mod wasm_impl {
                 playground_next_network_id: 1,
                 first_playground_tick: true,
                 render_buffer: Vec::with_capacity(crate::shared_world::MAX_ENTITIES),
+                asset_registry: assets::AssetRegistry::new(),
             })
         }
 
@@ -330,7 +340,7 @@ mod wasm_impl {
                         );
                     }
 
-                    self.transport = Some(transport);
+                    self.transport = Some(Box::new(transport));
                     self.connection_state = ConnectionState::InGame;
                     self.reconnect_attempts = 0;
                     tracing::info!("WebTransport connection established");
@@ -362,6 +372,33 @@ mod wasm_impl {
                     Err(JsValue::from_str(&format!("failed to connect: {e:?}")))
                 }
             }
+        }
+
+        #[wasm_bindgen]
+        pub async fn reconnect(
+            &mut self,
+            url: String,
+            cert_hash: Option<Vec<u8>>,
+        ) -> Result<(), JsValue> {
+            self.check_worker();
+            self.connection_state = ConnectionState::Reconnecting;
+            self.reconnect_attempts += 1;
+
+            tracing::info!(
+                "Attempting reconnection... (attempt {})",
+                self.reconnect_attempts
+            );
+
+            self.connect(url, cert_hash).await
+        }
+
+        #[wasm_bindgen]
+        pub async fn wasm_load_asset(
+            &mut self,
+            handle: assets::AssetHandle,
+            url: String,
+        ) -> Result<(), JsValue> {
+            self.asset_registry.load_asset(handle, &url).await
         }
 
         /// Sets the session token to be used for authentication upon connection.
@@ -510,7 +547,7 @@ mod wasm_impl {
         /// Simulation tick called by the Network Worker at a fixed rate (e.g. 20Hz).
         pub async fn tick(&mut self) {
             self.check_worker();
-            use aetheris_protocol::traits::{Encoder, GameTransport, WorldState};
+            use aetheris_protocol::traits::{Encoder, WorldState};
 
             let encoder = SerdeEncoder::new();
 
@@ -564,6 +601,10 @@ mod wasm_impl {
                         NetworkEvent::ClientDisconnected(id) => {
                             tracing::warn!(?id, "Server disconnected");
                         }
+                        NetworkEvent::Disconnected(_id) => {
+                            tracing::error!("Transport disconnected locally");
+                            self.connection_state = ConnectionState::Disconnected;
+                        }
                         NetworkEvent::Ping { client_id: _, tick } => {
                             // Immediately reflect the ping as a pong with same tick
                             let pong = NetworkEvent::Pong { tick };
@@ -604,7 +645,7 @@ mod wasm_impl {
                             client_id,
                             fragment,
                         } => {
-                            if let Some(data) = self.reassembler.add(client_id, fragment) {
+                            if let Some(data) = self.reassembler.ingest(client_id, fragment) {
                                 if let Ok(update) = encoder.decode(&data) {
                                     updates.push((client_id, update));
                                 }
@@ -1018,10 +1059,25 @@ mod wasm_impl {
         a + diff * alpha
     }
 
-    /// Fallback entry point for non-worker environments.
-    #[cfg(not(test))]
-    #[wasm_bindgen(start)]
-    pub fn main() {
-        console_error_panic_hook::set_once();
+    #[cfg(test)]
+    mod tests {
+        use super::*;
+        use crate::transport_mock::MockTransport;
+
+        #[tokio::test]
+        async fn test_transport_disconnection() {
+            let mut client = AetherisClient::new(None).unwrap();
+            let mock = MockTransport::new();
+            client.transport = Some(Box::new(mock.clone()));
+            client.connection_state = ConnectionState::InGame;
+
+            // Simulate disconnection
+            mock.set_closed(true);
+
+            // One tick to detect
+            client.tick().await;
+
+            assert_eq!(client.connection_state, ConnectionState::Disconnected);
+        }
     }
 }

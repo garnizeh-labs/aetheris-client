@@ -1,12 +1,14 @@
 use bytemuck::{Pod, Zeroable};
+use serde::{Deserialize, Serialize};
 
 #[repr(C)]
-#[derive(Copy, Clone, Debug, Pod, Zeroable)]
+#[derive(Copy, Clone, Debug, Pod, Zeroable, Serialize, Deserialize)]
 pub struct Vertex {
     pub position: [f32; 3],
     pub normal: [f32; 3],
 }
 
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct MeshData {
     pub vertices: Vec<Vertex>,
     pub indices: Vec<u16>,

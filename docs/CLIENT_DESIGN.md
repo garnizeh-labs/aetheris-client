@@ -294,7 +294,7 @@ document.addEventListener('mousemove', (e) => {
 
 ## 6. SharedArrayBuffer — Zero-Copy State Bridge
 
-> **Canonical Source:** See [WORKER_COMMUNICATION_DESIGN.md](WORKER_COMMUNICATION_DESIGN.md) for the full SAB memory layout, double-buffer flip-bit protocol, postMessage envelope specification, extensible region model (Nexus platform), and cross-origin isolation security requirements.
+> **Canonical Source:** See [WORKER_COMMUNICATION_DESIGN.md](WORKER_COMMUNICATION_DESIGN.md) for the full SAB memory layout, double-buffer flip-bit protocol, postMessage envelope specification, extensible region model (Extended Platform), and cross-origin isolation security requirements.
 
 ### 6.1 Design
 

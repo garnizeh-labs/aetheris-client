@@ -326,7 +326,14 @@ impl GameTransport for WebTransportBridge {
                 "WebTransportBridge event_queue mutex is poisoned in poll_events",
             ))
         })?;
-        Ok(q.drain(..).collect())
+
+        let mut events: Vec<NetworkEvent> = q.drain(..).collect();
+
+        if self.is_closed() {
+            events.push(NetworkEvent::Disconnected(ClientId(0)));
+        }
+
+        Ok(events)
     }
 
     async fn connected_client_count(&self) -> usize {
