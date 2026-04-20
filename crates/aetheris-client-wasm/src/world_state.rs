@@ -10,13 +10,13 @@ use aetheris_protocol::traits::WorldState;
 use aetheris_protocol::types::{
     ClientId, ComponentKind, LocalId, NetworkId, ShipClass, ShipStats, Transform,
 };
-use std::collections::HashMap;
+use std::collections::BTreeMap;
 
 /// A simplified client-side world that tracks entity states using `SabSlot`.
 #[derive(Debug)]
 pub struct ClientWorld {
     /// Map of `NetworkId` to the last known authoritative state.
-    pub entities: HashMap<NetworkId, SabSlot>,
+    pub entities: BTreeMap<NetworkId, SabSlot>,
     /// The latest tick received from the server.
     pub latest_tick: u64,
 }
@@ -32,7 +32,7 @@ impl ClientWorld {
     #[must_use]
     pub fn new() -> Self {
         Self {
-            entities: HashMap::new(),
+            entities: BTreeMap::new(),
             latest_tick: 0,
         }
     }
