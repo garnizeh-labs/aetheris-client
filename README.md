@@ -1,6 +1,13 @@
-# Aetheris Client
+<div align="center">
+  <h1>Aetheris Client</h1>
+  <p>High-performance, WASM-powered browser client runtime — featuring a deterministic three-worker execution model and WebGPU rendering.</p>
 
-High-performance, WASM-powered browser client runtime — featuring a deterministic three-worker execution model and WebGPU rendering.
+  [![CI](https://img.shields.io/github/actions/workflow/status/garnizeh-labs/aetheris-client/ci.yml?branch=main&style=flat-square&logo=github&label=CI)](https://github.com/garnizeh-labs/aetheris-client/actions)
+  [![Rust Version](https://img.shields.io/badge/rust-1.95.0%2B-blue?style=flat-square&logo=rust)](https://www.rust-lang.org/)
+  [![Conventional Commits](https://img.shields.io/badge/Conventional%20Commits-1.0.0-yellow.svg?style=flat-square)](https://conventionalcommits.org)
+</div>
+
+---
 
 ## Browser-Native Performance
 
@@ -13,12 +20,14 @@ High-performance, WASM-powered browser client runtime — featuring a determinis
 > - **Protocol v0.2.8:** Validated synchronization primitives for Newtonian flight (60Hz).
 > - **Bitmask Input Pipeline:** Efficiency-optimized InputCommand mapping (MoveDirection + Actions bitmask).
 > - **Quality Gate Passing:** just check and just test-wasm green for VS-01 scope.
-[![Build Status](https://github.com/garnizeh-labs/aetheris-client/actions/workflows/ci.yml/badge.svg)](https://github.com/garnizeh-labs/aetheris-client/actions)
-[![Crates.io](https://img.shields.io/crates/v/aetheris-client.svg)](https://crates.io/crates/aetheris-client)
-[![Docs.rs](https://docs.rs/aetheris-client/badge.svg)](https://docs.rs/aetheris-client)
-[![Rust Version](https://img.shields.io/badge/rust-1.95.0%2B-blue.svg?logo=rust)](https://www.rust-lang.org/)
-[![License](https://img.shields.io/badge/License-MIT%2FApache--2.0-green.svg)](LICENSE-MIT)
-[![Convention Commits](https://img.shields.io/badge/Conventional%20Commits-1.0.0-yellow.svg)](https://conventionalcommits.org)
+### 📦 Workspace Components
+
+| Crate | Link | Documentation |
+| :--- | :--- | :--- |
+| **`aetheris-client-wasm`** | [![Crates.io](https://img.shields.io/crates/v/aetheris-client-wasm?style=flat-square)](https://crates.io/crates/aetheris-client-wasm) | [![Docs.rs](https://img.shields.io/docsrs/aetheris-client-wasm?style=flat-square&logo=docs.rs&label=docs)](https://docs.rs/aetheris-client-wasm) |
+| **`aetheris-client-native`** | [![Crates.io](https://img.shields.io/crates/v/aetheris-client-native?style=flat-square)](https://crates.io/crates/aetheris-client-native) | [![Docs.rs](https://img.shields.io/docsrs/aetheris-client-native?style=flat-square&logo=docs.rs&label=docs)](https://docs.rs/aetheris-client-native) |
+
+---
 
 ## Workspace Components
 
