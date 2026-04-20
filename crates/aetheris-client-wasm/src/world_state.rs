@@ -91,6 +91,9 @@ impl WorldState for ClientWorld {
                             entry.y = transform.y;
                             entry.z = transform.z;
                             entry.rotation = transform.rotation;
+                            if transform.entity_type != 0 {
+                                entry.entity_type = transform.entity_type;
+                            }
                         }
                     }
                     Err(e) => {
