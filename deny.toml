@@ -6,14 +6,10 @@ allow = [
     "MIT",
     "Apache-2.0",
     "ISC",                 # Required by 'untrusted' (ring dep)
-    "CDLA-Permissive-2.0", # Required by 'webpki-root-certs' (rustls-platform-verifier dep)
     "BSD-2-Clause",        # Required by 'zerocopy' and other system crates
-    "BSD-3-Clause",        # Required by various ecosystem crates
     "Zlib",                # Required by 'miniz_oxide' and similar compression crates
     "Unicode-3.0",         # Required by 'unicode-ident'
     "CC0-1.0",             # Required by 'hexf-parse' (wgpu dependency)
-    "MPL-2.0",             # Required by 'webpki-roots' (openidconnect dep)
-    "0BSD",                # Required by 'quoted_printable' (lettre dep)
 ]
 
 [advisories]

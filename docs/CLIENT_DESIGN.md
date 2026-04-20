@@ -1,8 +1,8 @@
 ---
-Version: 0.2.0-draft
+Version: 0.2.1
 Status: Phase 1 — MVP / Phase 3 — Specified
 Phase: P1 | P2 | P3
-Last Updated: 2026-04-15
+Last Updated: 2026-04-20
 Authors: Team (Antigravity)
 Spec References: [PF-2000, PRIORITY_CHANNELS_DESIGN]
 Tier: 3
@@ -151,10 +151,8 @@ pub struct InputCommand {
     pub client_tick: u64,
     /// Movement direction (unit vector, client-frame coordinates).
     pub move_dir: Vec2,
-    /// Whether the jump button is pressed.
-    pub jump: bool,
-    /// Whether the primary action button is pressed.
-    pub action: bool,
+    /// Bitmask of active buttons/actions (e.g., bit 0=Secondary, 1=Primary, 2=Interact).
+    pub actions: u32,
     /// Camera look direction (yaw, pitch in radians).
     pub look_dir: Vec2,
 }

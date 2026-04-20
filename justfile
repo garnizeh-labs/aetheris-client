@@ -37,6 +37,16 @@ fix:
 test:
     cargo nextest run --workspace --profile ci --no-tests=pass
 
+# Run WASM smoke tests using wasm-pack (Node.js)
+[group('test')]
+test-wasm:
+    wasm-pack test --node crates/aetheris-client-wasm --features metrics
+
+# Run WASM smoke tests using wasm-pack (Headless Browser)
+[group('test')]
+test-wasm-browser:
+    wasm-pack test --chrome --headless crates/aetheris-client-wasm --features metrics
+
 # Run security audits (licenses, advisories, vulnerabilities)
 [group('security')]
 security:

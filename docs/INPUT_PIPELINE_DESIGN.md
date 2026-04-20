@@ -1,8 +1,8 @@
 ---
-Version: 0.1.0-draft
+Version: 0.1.1
 Status: Phase 1 — MVP / Phase 3 — Extensible
 Phase: P1 | P3
-Last Updated: 2026-04-16
+Last Updated: 2026-04-20
 Authors: Team (Antigravity)
 Spec References: [ENGINE_DESIGN, PROTOCOL_DESIGN, CLIENT_DESIGN, SECURITY_DESIGN, INTEGRATION_DESIGN]
 Tier: 3
@@ -156,8 +156,8 @@ const MAX_INSERT_LENGTH: usize = 10_000;
 pub struct GameInput {
     pub client_tick: u64,
     pub move_dir: Vec2,
-    pub jump: bool,
-    pub action: bool,
+    /// Bitmask of active buttons/actions (e.g., bit 1=Primary, 2=Secondary, 4=Interact).
+    pub actions: u32,
     pub look_dir: Vec2,
 }
 
@@ -173,8 +173,8 @@ impl InputSchema for GameInput {
         if self.look_dir.y.abs() > std::f32::consts::FRAC_PI_2 + 0.01 {
             return Err(InputValidationError::InvalidLookDirection);
         }
-        // Action rate limiting
-        if self.action && ctx.action_cooldown_remaining > 0 {
+        // Action rate limiting (Primary Action = Bit 1)
+        if (self.actions & 0x02) != 0 && ctx.action_cooldown_remaining > 0 {
             return Err(InputValidationError::ActionOnCooldown {
                 remaining: ctx.action_cooldown_remaining as u32,
             });
@@ -385,12 +385,16 @@ impl InputMapper for VoidRushInputMapper {
                 None
             }
             RawInputEvent::TickBoundary => {
+                // Map bools to bitmask (Bit 1=Primary, 4=Interact/Jump placeholder for VS-01)
+                let mut actions = 0u32;
+                if self.action_pressed { actions |= 0x02; }
+                if self.jump_pressed { actions |= 0x04; }
+
                 // Emit accumulated input at tick boundary
                 let input = GameInput {
                     client_tick: tick,
                     move_dir: self.move_state.normalize_or_zero(),
-                    jump: self.jump_pressed,
-                    action: self.action_pressed,
+                    actions,
                     look_dir: self.look_accumulator,
                 };
                 // Reset accumulators
