@@ -14,8 +14,8 @@ High-performance, WASM-powered browser client runtime — featuring a determinis
 > - **Bitmask Input Pipeline:** Efficiency-optimized InputCommand mapping (MoveDirection + Actions bitmask).
 > - **Quality Gate Passing:** just check and just test-wasm green for VS-01 scope.
 [![Build Status](https://github.com/garnizeh-labs/aetheris-client/actions/workflows/ci.yml/badge.svg)](https://github.com/garnizeh-labs/aetheris-client/actions)
-[![Crates.io](https://img.shields.io/crates/v/aetheris-client.svg)](https://crates.io/crates/aetheris-client)
-[![Docs.rs](https://docs.rs/aetheris-client/badge.svg)](https://docs.rs/aetheris-client)
+[![aetheris-client-native](https://img.shields.io/crates/v/aetheris-client-native?label=aetheris-client-native)](https://crates.io/crates/aetheris-client-native) [![docs](https://img.shields.io/docsrs/aetheris-client-native?label=docs)](https://docs.rs/aetheris-client-native)
+[![aetheris-client-wasm](https://img.shields.io/crates/v/aetheris-client-wasm?label=aetheris-client-wasm)](https://crates.io/crates/aetheris-client-wasm) [![docs](https://img.shields.io/docsrs/aetheris-client-wasm?label=docs)](https://docs.rs/aetheris-client-wasm)
 [![Rust Version](https://img.shields.io/badge/rust-1.95.0%2B-blue.svg?logo=rust)](https://www.rust-lang.org/)
 [![License](https://img.shields.io/badge/License-MIT%2FApache--2.0-green.svg)](LICENSE-MIT)
 [![Convention Commits](https://img.shields.io/badge/Conventional%20Commits-1.0.0-yellow.svg)](https://conventionalcommits.org)
