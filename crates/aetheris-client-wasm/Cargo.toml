@@ -32,7 +32,6 @@ tonic = { workspace = true }
 tonic-prost = { workspace = true }
 tonic-web-wasm-client = { workspace = true }
 dashmap = { workspace = true }
-aetheris-encoder-serde = { workspace = true }
 glam = { workspace = true }
 ruzstd = "0.8.2"
 
@@ -48,6 +47,7 @@ serde_json = { workspace = true }
 wasm-bindgen = { workspace = true }
 wasm-bindgen-futures = { workspace = true }
 serde-wasm-bindgen = { workspace = true }
+aetheris-encoder-serde = { workspace = true }
 js-sys = { workspace = true }
 web-sys = { workspace = true, features = [
     "CanvasRenderingContext2d",
@@ -82,9 +82,11 @@ web-sys = { workspace = true, features = [
     "Response",
 ] }
 
+[target.'cfg(target_arch = "wasm32")'.dev-dependencies]
+wasm-bindgen-test = { workspace = true }
+
 [dev-dependencies]
 rand = { workspace = true }
-wasm-bindgen-test = { workspace = true }
 
 [features]
 metrics = ["dep:metrics"]
