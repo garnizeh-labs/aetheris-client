@@ -7,12 +7,12 @@ High-performance, WASM-powered browser client runtime — featuring a determinis
 **Aetheris Client** brings authoritative multiplayer to the browser without compromising on frame times. By leveraging a native three-worker architecture, the client isolates networking (IO), simulation (Logic), and rendering (Visuals) into parallel streams. This ensures that even during heavy network spikes or complex simulation updates, the rendering thread maintains a butter-smooth 60Hz experience using modern WebGPU pipelines.
 
 > [!IMPORTANT]
-> 🚀 **Current State:** **Milestone M1020** — Ship Classes & ECS Synchronization (Implemented).
+> 🚀 **Current State:** **Milestone M1020** — Protocol v0.2.7 & Ship Classes (Implemented).
 > 
 > Features introduced in this phase:
-> - **Performance Observability:** Integrated M10105 lifecycle events and performance polling for WASM execution metrics.
+> - **Protocol v0.2.7:** Migrated to the latest spatial protocol definition for enhanced engine-client synchronization.
+> - **Performance Observability:** Integrated lifecycle events and performance polling for WASM execution metrics.
 > - **State Reconciliation:** Updated `world_state.rs` to reconcile new protocol types (`ShipStats`, `Loadout`, `ShipClass`).
-> - **Stability Fixes:** Improved `game.worker.ts` with async-await for WASM calls and robust reconnection logic.
 
 [![Build Status](https://github.com/garnizeh-labs/aetheris-client/actions/workflows/ci.yml/badge.svg)](https://github.com/garnizeh-labs/aetheris-client/actions)
 [![Crates.io](https://img.shields.io/crates/v/aetheris-client.svg)](https://crates.io/crates/aetheris-client)
