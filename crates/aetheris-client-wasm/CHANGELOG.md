@@ -7,6 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.6](https://github.com/garnizeh-labs/aetheris-client/compare/aetheris-client-wasm-v0.3.4...aetheris-client-wasm-v0.3.6) - 2026-04-20
+
+### Added
+
+- *(client)* synchronize ECS state handling and ship stats for M1020
+
+### Fixed
+
+- *(client)* update world state for Transform.entity_type compatibility
+
+### Other
+
+- release v0.3.5
+
 ## [0.3.5](https://github.com/garnizeh-labs/aetheris-client/compare/aetheris-client-wasm-v0.3.4...aetheris-client-wasm-v0.3.5) - 2026-04-20
 
 ### Added
