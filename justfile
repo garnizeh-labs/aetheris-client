@@ -113,6 +113,44 @@ client-build: client-install
 client-dev: client-install
     npm run dev --prefix playground
 
+# Start the Vite dev server (background)
+[group('run')]
+vite: client-install
+    @just wait-for-cert
+    cd playground && VITE_SERVER_CERT_HASH=$(cat ../target/dev-certs/cert.sha256 2>/dev/null || echo "missing") npm run dev &
+
+# Start the Vite dev server in connected-playground mode (background)
+[group('run')]
+vite-connected: client-install
+    @just wait-for-cert
+    cd playground && VITE_PLAYGROUND_CONNECTED=true VITE_SERVER_CERT_HASH=$(cat ../target/dev-certs/cert.sha256 2>/dev/null || echo "missing") npm run dev &
+
+# Full playground session in connected mode
+[group('run')]
+playground-connected: stop wasm-dev
+    @mkdir -p logs
+    cd playground && VITE_PLAYGROUND_CONNECTED=true VITE_SERVER_CERT_HASH=$(cat ../../aetheris-engine/target/dev-certs/cert.sha256 2>/dev/null || echo "missing") npm run dev >> ../logs/vite.log 2>&1 &
+    @echo "Playground connected session ready at http://localhost:5173/playground.html"
+
+# Helper to wait for server certificate
+wait-for-cert:
+    @echo "Waiting for target/dev-certs/cert.sha256 (Timeout: 60s)..."
+    @i=0; while [ $i -lt 60 ]; do \
+        if [ -f target/dev-certs/cert.sha256 ]; then \
+            echo "Certificate ready."; \
+            exit 0; \
+        fi; \
+        sleep 1; \
+        i=`expr $i + 1`; \
+    done; \
+    echo "Error: target/dev-certs/cert.sha256 missing. Run 'just server' first."; \
+    exit 1
+
+# Stop all background processes
+[group('maintenance')]
+stop:
+    -fuser -k 5173/tcp >/dev/null 2>&1 || true
+
 # Build the WASM client (release) then the web bundle — full production pipeline
 [group('build')]
 client: wasm client-build
@@ -120,12 +158,6 @@ client: wasm client-build
 # Build the WASM client (debug) then the web bundle — fast dev pipeline
 [group('build')]
 client-dev-full: wasm-dev client-build
-
-# Start the Vite dev server (background)
-[group('run')]
-vite: client-install
-    @mkdir -p logs
-    cd playground && npm run dev >> ../logs/vite.log 2>&1 &
 
 # Start the playground in isolated sandbox mode (no server, no auth)
 [group('run')]
@@ -142,25 +174,6 @@ playground: stop wasm-dev client-install
     @echo "  \x1b[1;36m└─────────────────────────────────────────────────────────────┘\x1b[0m"
     @echo ""
 
-# Full dev session: build WASM, start Vite
-[group('run')]
-dev: wasm-dev client-install vite
-    @echo ""
-    @echo "========================================"
-    @echo "  Aetheris Client — Dev Session Ready"
-    @echo "  Client → http://localhost:5173"
-    @echo "========================================"
-
-# Stop all background processes (vite)
-[group('maintenance')]
-stop:
-    -lsof -ti:5173 -ti:5174 -ti:5175 | xargs kill 2>/dev/null || true
-
-# Follow playground logs
-[group('maintenance')]
-logs:
-    @mkdir -p logs
-    tail -f logs/vite.log
 
 # Remove all build artefacts
 [group('maintenance')]

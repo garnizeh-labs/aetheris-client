@@ -41,13 +41,13 @@ async function processQueue() {
  */
 async function attemptReconnection() {
     if (!client || !lastConnectParams || isReconnecting) return;
-    
+
     isReconnecting = true;
     reconnectAttemptCount++;
     const baseDelay = Math.min(10000, 500 * Math.pow(1.5, reconnectAttemptCount - 1));
     const jitter = (Math.random() * 0.4) + 0.8; // ±20% jitter
     const delay = baseDelay * jitter;
-    
+
     console.log(`[GameWorker] Reconnecting in ${Math.round(delay)}ms... (attempt ${reconnectAttemptCount})`);
     self.postMessage({ type: 'reconnecting', payload: { attempt: reconnectAttemptCount, delay } });
 
@@ -170,7 +170,7 @@ self.onmessage = async (e) => {
         if (client) {
             if (currentSessionToken) {
                 // Network spawn
-                withClient(c => c.playground_spawn_net(payload.type, payload.x, payload.y, payload.rot));
+                withClient(async (c) => await c.playground_spawn_net(payload.type, payload.x, payload.y, payload.rot));
             } else {
                 // Local spawn (Sandbox)
                 withClient(c => c.playground_spawn(payload.type, payload.x, payload.y, payload.rot));
@@ -178,7 +178,7 @@ self.onmessage = async (e) => {
         }
     } else if (type === 'p_clear') {
         console.log('[GameWorker] Clear world requested');
-        withClient(c => c.playground_clear_server());
+        withClient(async (c) => await c.playground_clear_server());
     } else if (type === 'p_toggle_rotation') {
         console.log(`[GameWorker] Toggle rotation: ${payload.enabled}`);
         withClient(c => c.playground_set_rotation_enabled(payload.enabled));
@@ -197,7 +197,10 @@ self.onmessage = async (e) => {
         });
     } else if (type === 'p_stress_test_net') {
         console.log(`[GameWorker] Network Stress test requested: ${payload.count} units (rotate: ${payload.rotate})`);
-        withClient(c => c.playground_stress_test(payload.count, payload.rotate));
+        withClient(async (c) => {
+            await c.playground_stress_test(payload.count, payload.rotate);
+            console.log(`[GameWorker] playground_stress_test() WASM call dispatched — waiting for server response`);
+        });
     } else if (type === 'request_otp') {
         try {
             if (!client) throw new Error('Client not initialized');
@@ -234,7 +237,7 @@ self.onmessage = async (e) => {
             client.set_session_token(token);
             lastConnectParams = { url, token, certHash };
             reconnectAttemptCount = 0;
-            
+
             await client.connect(url, certHash);
 
             self.postMessage({
@@ -248,20 +251,39 @@ self.onmessage = async (e) => {
                     simIntervalId = setTimeout(tickLoop, 500);
                     return;
                 }
-                
+
                 await withClient(async (c) => {
                     await c.tick();
-                    
+
                     // M10146 — Check for disconnected state and trigger reconnection
                     if (c.connection_state === 0) { // 0 is Disconnected
                         // Wait, I should check the enum values for ConnectionState
                         attemptReconnection();
                     }
                 });
-                
+
                 simIntervalId = setTimeout(tickLoop, 1000 / 60);
             };
             simIntervalId = setTimeout(tickLoop, 0);
+
+            // M10105 — poll WASM metrics every 1s and send to main thread
+            if (metricsIntervalId) clearTimeout(metricsIntervalId as number);
+            const pollMetrics = () => {
+                if (isPaused) {
+                    metricsIntervalId = setTimeout(pollMetrics, 1000);
+                    return;
+                }
+                try {
+                    const metrics = wasm_get_metrics();
+                    if (metrics) {
+                        self.postMessage({ type: 'wasm_metrics', payload: metrics });
+                    }
+                } catch (e) {
+                    /* non-fatal */
+                }
+                metricsIntervalId = setTimeout(pollMetrics, 1000);
+            };
+            metricsIntervalId = setTimeout(pollMetrics, 1000);
         } catch (err) {
             console.error('[GameWorker] Connection failed:', err);
             self.postMessage({ type: 'connection_error', payload: { reason: (err as any).toString(), retriable: true } });
