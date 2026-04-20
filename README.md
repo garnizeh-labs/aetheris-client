@@ -5,6 +5,7 @@
   [![CI](https://img.shields.io/github/actions/workflow/status/garnizeh-labs/aetheris-client/ci.yml?branch=main&style=flat-square&logo=github&label=CI)](https://github.com/garnizeh-labs/aetheris-client/actions)
   [![Rust Version](https://img.shields.io/badge/rust-1.95.0%2B-blue?style=flat-square&logo=rust)](https://www.rust-lang.org/)
   [![Conventional Commits](https://img.shields.io/badge/Conventional%20Commits-1.0.0-yellow.svg?style=flat-square)](https://conventionalcommits.org)
+  [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg?style=flat-square)](https://github.com/garnizeh-labs/aetheris-client/pulls)
 </div>
 
 ---
@@ -15,11 +16,13 @@
 
 > [!IMPORTANT]
 > 🚀 **Current State:** **VS-01 (One Ship, One Sector) complete!** Protocol v0.2.8 & Authoritative Input Pipeline.
-> 
+>
 > Features introduced in this phase:
+>
 > - **Protocol v0.2.8:** Validated synchronization primitives for Newtonian flight (60Hz).
 > - **Bitmask Input Pipeline:** Efficiency-optimized InputCommand mapping (MoveDirection + Actions bitmask).
 > - **Quality Gate Passing:** just check and just test-wasm green for VS-01 scope.
+>
 ### 📦 Workspace Components
 
 | Crate | Link | Documentation |
@@ -34,7 +37,7 @@
 The client is split into focused crates for lean WASM builds and clear native/browser isolation:
 
 - **[`aetheris-client-wasm`](crates/aetheris-client-wasm)**: The browser runtime. Implements the simulation loop, WebGPU renderer, and WebTransport networking as a SharedArrayBuffer-backed WASM module.
-- **[`aetheris-client-native`](crates/aetheris-client-native)**: The native runtime stub. Provides the same trait surface for desktop and server-side headless clients.
+- **`aetheris-client-native`**: The native runtime stub. Provides the same trait surface for desktop and server-side headless clients.
 
 ## Quickstart
 
