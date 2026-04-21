@@ -7,6 +7,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.10](https://github.com/garnizeh-labs/aetheris-client/compare/aetheris-client-wasm-v0.3.8...aetheris-client-wasm-v0.3.10) - 2026-04-21
+
+### Added
+
+- *(client)* harden mining render loop and fix protocol v0.2.11 CI compilation
+- *(mining)* update client input to targeted model and fix protocol v0.2.11 errors
+- *(client)* implement GameEvent handling and mining target cleanup
+
+### Fixed
+
+- *(client)* allow unreachable wildcards for future-proof protocol matching
+
+### Other
+
+- release v0.3.9
+- *(render)* optimize mining target lookup and harden laser buffer
+
 ## [0.3.9](https://github.com/garnizeh-labs/aetheris-client/compare/aetheris-client-wasm-v0.3.8...aetheris-client-wasm-v0.3.9) - 2026-04-21
 
 ### Added

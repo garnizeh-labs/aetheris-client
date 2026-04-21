@@ -3,7 +3,7 @@ resolver = "2"
 members = ["crates/*"]
 
 [workspace.package]
-version = "0.3.9"
+version = "0.3.10"
 edition = "2024"
 rust-version = "1.95.0"
 authors = ["garnizeH Labs"]
@@ -16,8 +16,8 @@ categories = ["game-engines", "wasm", "network-programming", "rendering"]
 
 [workspace.dependencies]
 # Internal Workspace Crates
-aetheris-client-wasm = { path = "crates/aetheris-client-wasm", version = "0.3.9" }
-aetheris-client-native = { path = "crates/aetheris-client-native", version = "0.3.9" }
+aetheris-client-wasm = { path = "crates/aetheris-client-wasm", version = "0.3.10" }
+aetheris-client-native = { path = "crates/aetheris-client-native", version = "0.3.10" }
 
 # Protocol (published — garnizeh-labs/aetheris-protocol)
 aetheris-protocol = { version = "0.2.11" }
