@@ -729,11 +729,13 @@ mod wasm_impl {
                                         }
                                     }
                                 }
+                                #[allow(unreachable_patterns)]
                                 _ => {
                                     tracing::debug!("Unhandled inner GameEvent variant");
                                 }
                             }
                         }
+                        #[allow(unreachable_patterns)]
                         _ => {
                             tracing::debug!("Unhandled outer NetworkEvent variant");
                         }
