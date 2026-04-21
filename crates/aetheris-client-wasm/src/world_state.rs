@@ -58,87 +58,48 @@ impl WorldState for ClientWorld {
             }
 
             // Ensure entity exists for component updates
-            let is_new = !self.entities.contains_key(&update.network_id);
-            if is_new {
+            self.entities.entry(update.network_id).or_insert_with(|| {
                 tracing::debug!(
                     network_id = update.network_id.0,
                     kind = update.component_kind.0,
                     "New entity from server"
                 );
-            }
-            self.entities.entry(update.network_id).or_insert(SabSlot {
-                network_id: update.network_id.0,
-                x: 0.0,
-                y: 0.0,
-                z: 0.0,
-                rotation: 0.0,
-                dx: 0.0,
-                dy: 0.0,
-                dz: 0.0,
-                hp: 100,
-                shield: 0,
-                entity_type: 0,
-                flags: 1,
-                padding: [0; 5],
+                SabSlot {
+                    network_id: update.network_id.0,
+                    x: 0.0,
+                    y: 0.0,
+                    z: 0.0,
+                    rotation: 0.0,
+                    dx: 0.0,
+                    dy: 0.0,
+                    dz: 0.0,
+                    hp: 100,
+                    shield: 0,
+                    entity_type: 0,
+                    flags: 1,
+                    cargo_ore: 0,
+                    mining_target_id: 0,
+                    mining_active: 0,
+                }
             });
 
-            match update.component_kind {
-                // ComponentKind(1) == Transform (Spatial data)
-                ComponentKind(1) => match rmp_serde::from_slice::<Transform>(&update.payload) {
-                    Ok(transform) => {
-                        if let Some(entry) = self.entities.get_mut(&update.network_id) {
-                            entry.x = transform.x;
-                            entry.y = transform.y;
-                            entry.z = transform.z;
-                            entry.rotation = transform.rotation;
-                            if transform.entity_type != 0 {
-                                entry.entity_type = transform.entity_type;
-                            }
-                        }
-                    }
-                    Err(e) => {
-                        tracing::warn!(network_id = update.network_id.0, error = ?e, "Failed to decode Transform");
-                    }
-                },
-                // ComponentKind(5) == ShipClass (Drives rendering type)
-                ComponentKind(5) => match rmp_serde::from_slice::<ShipClass>(&update.payload) {
-                    Ok(ship_class) => {
-                        if let Some(entry) = self.entities.get_mut(&update.network_id) {
-                            entry.entity_type = match ship_class {
-                                ShipClass::Interceptor => 1,
-                                ShipClass::Dreadnought => 3,
-                                ShipClass::Hauler => 4,
-                            };
-                        }
-                    }
-                    Err(e) => {
-                        tracing::warn!(network_id = update.network_id.0, error = ?e, "Failed to decode ShipClass");
-                    }
-                },
-                // ComponentKind(6) == ShipStats (HP/Shield)
-                ComponentKind(6) => match rmp_serde::from_slice::<ShipStats>(&update.payload) {
-                    Ok(stats) => {
-                        if let Some(entry) = self.entities.get_mut(&update.network_id) {
-                            entry.hp = stats.hp;
-                            entry.shield = stats.shield;
-                        }
-                    }
-                    Err(e) => {
-                        tracing::warn!(network_id = update.network_id.0, error = ?e, "Failed to decode ShipStats");
-                    }
-                },
-                kind => {
-                    tracing::debug!(
-                        network_id = update.network_id.0,
-                        kind = kind.0,
-                        "Unhandled component kind"
-                    );
-                }
-            }
+            self.apply_component_update(update);
         }
     }
 
-    fn simulate(&mut self) {}
+    fn simulate(&mut self) {
+        let dt = 0.05; // 20Hz
+        let drag_base = 0.05;
+        for slot in self.entities.values_mut() {
+            // In a simple velocity integration without input, we just move by DX/DY.
+            slot.x += slot.dx * dt;
+            slot.y += slot.dy * dt;
+
+            // Apply Drag (Local approximation)
+            slot.dx *= 1.0 - (drag_base * dt);
+            slot.dy *= 1.0 - (drag_base * dt);
+        }
+    }
 
     fn spawn_networked(&mut self) -> NetworkId {
         NetworkId(0)
@@ -163,5 +124,104 @@ impl WorldState for ClientWorld {
 
     fn clear_world(&mut self) {
         self.entities.clear();
+    }
+}
+
+impl ClientWorld {
+    fn apply_component_update(&mut self, update: &ComponentUpdate) {
+        match update.component_kind {
+            // ComponentKind(1) == Transform (Spatial data)
+            ComponentKind(1) => match rmp_serde::from_slice::<Transform>(&update.payload) {
+                Ok(transform) => {
+                    if let Some(entry) = self.entities.get_mut(&update.network_id) {
+                        entry.x = transform.x;
+                        entry.y = transform.y;
+                        entry.z = transform.z;
+                        entry.rotation = transform.rotation;
+                        if transform.entity_type != 0 {
+                            entry.entity_type = transform.entity_type;
+                        }
+                    }
+                }
+                Err(e) => {
+                    tracing::warn!(network_id = update.network_id.0, error = ?e, "Failed to decode Transform");
+                }
+            },
+            // ComponentKind(5) == ShipClass (Drives rendering type)
+            ComponentKind(5) => match rmp_serde::from_slice::<ShipClass>(&update.payload) {
+                Ok(ship_class) => {
+                    if let Some(entry) = self.entities.get_mut(&update.network_id) {
+                        entry.entity_type = match ship_class {
+                            ShipClass::Interceptor => 1,
+                            ShipClass::Dreadnought => 3,
+                            ShipClass::Hauler => 4,
+                        };
+                    }
+                }
+                Err(e) => {
+                    tracing::warn!(network_id = update.network_id.0, error = ?e, "Failed to decode ShipClass");
+                }
+            },
+            // ComponentKind(6) == ShipStats (HP/Shield)
+            ComponentKind(6) => match rmp_serde::from_slice::<ShipStats>(&update.payload) {
+                Ok(stats) => {
+                    if let Some(entry) = self.entities.get_mut(&update.network_id) {
+                        entry.hp = stats.hp;
+                        entry.shield = stats.shield;
+                    }
+                }
+                Err(e) => {
+                    tracing::warn!(network_id = update.network_id.0, error = ?e, "Failed to decode ShipStats");
+                }
+            },
+            // ComponentKind(1024) == MiningBeam
+            aetheris_protocol::types::MINING_BEAM_KIND => {
+                use aetheris_protocol::types::MiningBeam;
+                match rmp_serde::from_slice::<MiningBeam>(&update.payload) {
+                    Ok(beam) => {
+                        if let Some(entry) = self.entities.get_mut(&update.network_id) {
+                            entry.mining_active = u8::from(beam.active);
+                            #[allow(clippy::cast_possible_truncation)]
+                            {
+                                entry.mining_target_id = beam.target.map_or(0, |id| id.0 as u16);
+                            }
+                        }
+                    }
+                    Err(e) => {
+                        tracing::warn!(network_id = update.network_id.0, error = ?e, "Failed to decode MiningBeam");
+                    }
+                }
+            }
+            // ComponentKind(1025) == CargoHold
+            aetheris_protocol::types::CARGO_HOLD_KIND => {
+                use aetheris_protocol::types::CargoHold;
+                match rmp_serde::from_slice::<CargoHold>(&update.payload) {
+                    Ok(cargo) => {
+                        if let Some(entry) = self.entities.get_mut(&update.network_id) {
+                            entry.cargo_ore = cargo.ore_count;
+                        }
+                    }
+                    Err(e) => {
+                        tracing::warn!(network_id = update.network_id.0, error = ?e, "Failed to decode CargoHold");
+                    }
+                }
+            }
+            // ComponentKind(1026) == Asteroid
+            aetheris_protocol::types::ASTEROID_KIND => {
+                if let Some(entry) = self.entities.get_mut(&update.network_id) {
+                    // Mark as Asteroid type (5) if not already set
+                    if entry.entity_type == 0 {
+                        entry.entity_type = 5;
+                    }
+                }
+            }
+            kind => {
+                tracing::debug!(
+                    network_id = update.network_id.0,
+                    kind = kind.0,
+                    "Unhandled component kind"
+                );
+            }
+        }
     }
 }
