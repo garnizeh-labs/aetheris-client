@@ -601,14 +601,19 @@ mod wasm_impl {
                                 }
                                 Err(_) => {
                                     // Try to decode as a protocol/wire event instead
-                                    if let Ok(wire_event) = encoder.decode_event(&data) {
-                                        match wire_event {
-                                            aetheris_protocol::events::WireEvent::GameEvent(
-                                                aetheris_protocol::events::GameEvent::AsteroidDepleted {
-                                                    network_id,
-                                                },
-                                            ) => {
+                                    if let Ok(event) = encoder.decode_event(&data) {
+                                        match event {
+                                            aetheris_protocol::events::NetworkEvent::GameEvent {
+                                                event:
+                                                    aetheris_protocol::events::GameEvent::AsteroidDepleted {
+                                                        network_id,
+                                                    },
+                                                ..
+                                            } => {
                                                 tracing::info!(?network_id, "Asteroid depleted");
+                                                // Instant local despawn to hide latency
+                                                self.world_state.entities.remove(&network_id);
+
                                                 // Clear local mining target if it matches the depleted asteroid
                                                 for slot in self.world_state.entities.values_mut() {
                                                     // flags & 0x04 is local player
@@ -782,7 +787,9 @@ mod wasm_impl {
                 shield: 100,
                 entity_type,
                 flags: 0x01, // ALIVE
-                padding: [0; 5],
+                mining_active: 0,
+                cargo_ore: 0,
+                mining_target_id: 0,
             };
             self.world_state.entities.insert(id, slot);
         }
@@ -836,7 +843,8 @@ mod wasm_impl {
             tick: u64,
             move_x: f32,
             move_y: f32,
-            actions: u32,
+            actions_mask: u32,
+            target_id: Option<u64>,
         ) -> Result<(), JsValue> {
             self.check_worker();
 
@@ -844,14 +852,34 @@ mod wasm_impl {
                 JsValue::from_str("Cannot send input: transport not initialized or closed")
             })?;
 
-            // 1. Prepare and clamp command
-            let cmd = InputCommand {
-                tick,
-                move_x,
-                move_y,
-                actions,
+            // 1. Prepare actions vector
+            let mut actions = Vec::new();
+
+            // Movement action
+            if move_x.abs() > f32::EPSILON || move_y.abs() > f32::EPSILON {
+                actions.push(PlayerInputKind::Move {
+                    x: move_x,
+                    y: move_y,
+                });
             }
-            .clamped();
+
+            // Bitmask actions (M1020 mapping)
+            // Bit 0: FirePrimary
+            if (actions_mask & 0x01) != 0 {
+                actions.push(PlayerInputKind::FirePrimary);
+            }
+            // Bit 1: ToggleMining
+            if (actions_mask & 0x02) != 0 {
+                if let Some(id) = target_id {
+                    actions.push(PlayerInputKind::ToggleMining {
+                        target: NetworkId(id),
+                    });
+                } else {
+                    tracing::warn!("ToggleMining requested without target_id; dropping action");
+                }
+            }
+
+            let cmd = InputCommand { tick, actions }.clamped();
 
             // 2. Encode as a ComponentUpdate-compatible packet
             // We use ComponentKind(128) as the convention for InputCommands.
