@@ -252,6 +252,10 @@ pub struct RenderState {
     #[cfg(debug_assertions)]
     label_color: [f32; 4],
 
+    // Laser resources
+    laser_pipeline: RenderPipeline,
+    laser_vertex_buffer: Buffer,
+
     clear_color: wgpu::Color,
 }
 
@@ -631,6 +635,70 @@ impl RenderState {
             mapped_at_creation: false,
         });
 
+        // 7. Laser Pipeline (VS-02)
+        let laser_shader = device.create_shader_module(ShaderModuleDescriptor {
+            label: Some("Aetheris Laser Shader"),
+            source: ShaderSource::Wgsl(include_str!("shaders/debug.wgsl").into()), // Reuse debug for now
+        });
+
+        let laser_vertex_layout = VertexBufferLayout {
+            array_stride: std::mem::size_of::<DebugVertex>() as u64,
+            step_mode: VertexStepMode::Vertex,
+            attributes: &[
+                wgpu::VertexAttribute {
+                    offset: 0,
+                    shader_location: 0,
+                    format: VertexFormat::Float32x3,
+                },
+                wgpu::VertexAttribute {
+                    offset: 12,
+                    shader_location: 1,
+                    format: VertexFormat::Float32x4,
+                },
+            ],
+        };
+
+        let laser_pipeline = device.create_render_pipeline(&RenderPipelineDescriptor {
+            label: Some("Aetheris Laser Pipeline"),
+            layout: Some(&render_pipeline_layout),
+            vertex: VertexState {
+                module: &laser_shader,
+                entry_point: Some("vs_main"),
+                compilation_options: PipelineCompilationOptions::default(),
+                buffers: &[laser_vertex_layout],
+            },
+            fragment: Some(FragmentState {
+                module: &laser_shader,
+                entry_point: Some("fs_main"),
+                compilation_options: PipelineCompilationOptions::default(),
+                targets: &[Some(ColorTargetState {
+                    format: swapchain_format,
+                    blend: Some(BlendState::ALPHA_BLENDING),
+                    write_mask: ColorWrites::ALL,
+                })],
+            }),
+            primitive: PrimitiveState {
+                topology: PrimitiveTopology::LineList,
+                strip_index_format: None,
+                front_face: FrontFace::Ccw,
+                cull_mode: None,
+                unclipped_depth: false,
+                polygon_mode: PolygonMode::Fill,
+                conservative: false,
+            },
+            depth_stencil: None,
+            multisample: MultisampleState::default(),
+            multiview_mask: None,
+            cache: None,
+        });
+
+        let laser_vertex_buffer = device.create_buffer(&BufferDescriptor {
+            label: Some("Laser Vertex Buffer"),
+            size: (std::mem::size_of::<DebugVertex>() * 2000) as u64, // Support up to 1000 lasers
+            usage: BufferUsages::VERTEX | BufferUsages::COPY_DST,
+            mapped_at_creation: false,
+        });
+
         Ok(Self {
             device,
             queue,
@@ -659,6 +727,8 @@ impl RenderState {
             camera_bind_group,
             instance_buffer,
             primitives,
+            laser_pipeline,
+            laser_vertex_buffer,
             clear_color: Color {
                 r: 0.01,
                 g: 0.01,
@@ -888,6 +958,46 @@ impl RenderState {
 
                     current_offset += size;
                 }
+            }
+
+            // 5.5. Draw Lasers (Mining Beams)
+            let mut laser_vertices = Vec::new();
+            let laser_color = [1.0, 0.4, 0.0, 1.0]; // Bright Orange
+
+            for ent in &sorted_entities {
+                if ent.mining_active != 0 && ent.mining_target_id != 0 {
+                    let start = Vec3::new(ent.x, ent.y, 0.0);
+
+                    // Find target by truncated ID (16-bit)
+                    if let Some(target) = sorted_entities
+                        .iter()
+                        .find(|t| (t.network_id as u16) == ent.mining_target_id)
+                    {
+                        let end = Vec3::new(target.x, target.y, 0.0);
+
+                        laser_vertices.push(DebugVertex {
+                            position: start.to_array(),
+                            color: laser_color,
+                        });
+                        laser_vertices.push(DebugVertex {
+                            position: end.to_array(),
+                            color: laser_color,
+                        });
+                    }
+                }
+            }
+
+            if !laser_vertices.is_empty() {
+                self.queue.write_buffer(
+                    &self.laser_vertex_buffer,
+                    0,
+                    bytemuck::cast_slice(&laser_vertices),
+                );
+
+                render_pass.set_pipeline(&self.laser_pipeline);
+                render_pass.set_bind_group(0, &self.camera_bind_group, &[]);
+                render_pass.set_vertex_buffer(0, self.laser_vertex_buffer.slice(..));
+                render_pass.draw(0..laser_vertices.len() as u32, 0..1);
             }
         }
 

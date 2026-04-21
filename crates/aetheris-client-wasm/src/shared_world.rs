@@ -48,8 +48,12 @@ pub struct SabSlot {
     pub entity_type: u16, // Offset 40, size 2
     /// Bitfield flags (Alive: 0, Visible: 1, `LocalPlayer`: 2, Interpolate: 3, ...).
     pub flags: u8, // Offset 42, size 1
-    /// Padding for 48-byte total size and alignment.
-    pub padding: [u8; 5], // Offset 43, size 5
+    /// Mining state (0: inactive, 1: active).
+    pub mining_active: u8, // Offset 43, size 1
+    /// Current cargo count.
+    pub cargo_ore: u16, // Offset 44, size 2
+    /// Network ID of the mining target (truncated to 16-bit for Phase 1).
+    pub mining_target_id: u16, // Offset 46, size 2
 }
 
 /// The header for the `SharedArrayBuffer`.

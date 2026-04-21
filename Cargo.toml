@@ -74,7 +74,7 @@ strip = "symbols" # Remove symbols
 panic = "abort"   # Save ~50KB per WASM bin
 codegen-units = 1 # Better LTO
 
-# [patch.crates-io]
-# aetheris-protocol = { path = "../aetheris-protocol/crates/aetheris-protocol" }
-# aetheris-encoder-serde = { path = "../aetheris-protocol/crates/aetheris-encoder-serde" }
-# aetheris-encoder-bitpack = { path = "../aetheris-protocol/crates/aetheris-encoder-bitpack" }
+[patch.crates-io]
+aetheris-protocol = { path = "../aetheris-protocol/crates/aetheris-protocol" }
+aetheris-encoder-serde = { path = "../aetheris-protocol/crates/aetheris-encoder-serde" }
+aetheris-encoder-bitpack = { path = "../aetheris-protocol/crates/aetheris-encoder-bitpack" }

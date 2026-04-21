@@ -599,8 +599,35 @@ mod wasm_impl {
                                     );
                                     updates.push((client_id, update));
                                 }
-                                Err(e) => {
-                                    tracing::warn!(error = ?e, "Failed to decode server message");
+                                Err(_) => {
+                                    // Try to decode as a protocol/wire event instead
+                                    if let Ok(wire_event) = encoder.decode_event(&data) {
+                                        match wire_event {
+                                            aetheris_protocol::events::WireEvent::GameEvent(
+                                                aetheris_protocol::events::GameEvent::AsteroidDepleted {
+                                                    network_id,
+                                                },
+                                            ) => {
+                                                tracing::info!(?network_id, "Asteroid depleted");
+                                                // Clear local mining target if it matches the depleted asteroid
+                                                for slot in self.world_state.entities.values_mut() {
+                                                    // flags & 0x04 is local player
+                                                    if (slot.flags & 0x04) != 0
+                                                        && slot.mining_target_id == (network_id.0 as u16)
+                                                    {
+                                                        slot.mining_active = 0;
+                                                        slot.mining_target_id = 0;
+                                                        tracing::info!("Cleared local mining target due to depletion");
+                                                    }
+                                                }
+                                            }
+                                            _ => {}
+                                        }
+                                    } else {
+                                        tracing::warn!(
+                                            "Failed to decode server message as update or wire event"
+                                        );
+                                    }
                                 }
                             }
                         }
