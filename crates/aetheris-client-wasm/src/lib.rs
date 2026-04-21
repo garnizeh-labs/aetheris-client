@@ -113,7 +113,9 @@ mod wasm_impl {
     use aetheris_encoder_serde::SerdeEncoder;
     use aetheris_protocol::events::{NetworkEvent, ReplicationEvent};
     use aetheris_protocol::traits::{Encoder, GameTransport};
-    use aetheris_protocol::types::{ClientId, ComponentKind, InputCommand, NetworkId};
+    use aetheris_protocol::types::{
+        ClientId, ComponentKind, InputCommand, NetworkId, PlayerInputKind,
+    };
     use wasm_bindgen::prelude::*;
 
     #[wasm_bindgen]
@@ -698,6 +700,42 @@ mod wasm_impl {
                         NetworkEvent::ClearWorld { .. } => {
                             tracing::info!("Server initiated world clear");
                             self.world_state.entities.clear();
+                        }
+                        NetworkEvent::GameEvent { event, .. } => {
+                            // Forward to inner GameEvent logic if needed,
+                            // or just handle the depletion here if it's the only one.
+                            match event {
+                                aetheris_protocol::events::GameEvent::AsteroidDepleted {
+                                    network_id,
+                                } => {
+                                    tracing::info!(
+                                        ?network_id,
+                                        "Asteroid depleted (via GameEvent)"
+                                    );
+                                    // Instant local despawn to hide latency
+                                    self.world_state.entities.remove(&network_id);
+
+                                    // Clear local mining target if it matches the depleted asteroid
+                                    for slot in self.world_state.entities.values_mut() {
+                                        // flags & 0x04 is local player
+                                        if (slot.flags & 0x04) != 0
+                                            && slot.mining_target_id == (network_id.0 as u16)
+                                        {
+                                            slot.mining_active = 0;
+                                            slot.mining_target_id = 0;
+                                            tracing::info!(
+                                                "Cleared local mining target due to depletion"
+                                            );
+                                        }
+                                    }
+                                }
+                                _ => {
+                                    tracing::debug!("Unhandled inner GameEvent variant");
+                                }
+                            }
+                        }
+                        _ => {
+                            tracing::debug!("Unhandled outer NetworkEvent variant");
                         }
                     }
                 }

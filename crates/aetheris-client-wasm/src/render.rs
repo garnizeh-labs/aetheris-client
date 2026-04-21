@@ -24,7 +24,6 @@ use wgpu::{
     VertexStepMode,
 };
 
-#[cfg(debug_assertions)]
 const MAX_DEBUG_VERTICES: usize = 10_000;
 
 #[cfg(debug_assertions)]
@@ -69,7 +68,6 @@ impl DebugGridMode {
     }
 }
 
-#[cfg(debug_assertions)]
 #[repr(C)]
 #[derive(Copy, Clone, Debug, Pod, Zeroable)]
 pub struct DebugVertex {
