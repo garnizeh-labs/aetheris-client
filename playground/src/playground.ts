@@ -5,6 +5,9 @@ import { WorldRegistry } from './world-registry';
 
 const CONNECTED_MODE = import.meta.env.VITE_PLAYGROUND_CONNECTED === 'true';
 
+// Declared globally via vite.config.ts
+declare const __APP_VERSION__: string;
+
 class AetherisPlayground {
     private gameWorker!: Worker;
     private renderWorker!: Worker;
@@ -14,6 +17,9 @@ class AetherisPlayground {
     private currentRequestId: string | null = null;
     private world!: WorldRegistry;
     private _monitorRafId: number | null = null;
+    private heldKeys: Set<string> = new Set();
+    private isSessionActive: boolean = false;
+    private lastLoggedManifest: string = '';
 
     constructor() {
         this.statusEl = document.getElementById('status')!;
@@ -67,11 +73,17 @@ class AetherisPlayground {
         const modeColor = CONNECTED_MODE ? '#4ade80' : '#38bdf8';
         console.log(`%cAetheris Engine — PLAYGROUND (${modeLabel})`, `color: ${modeColor}; font-weight: bold; font-size: 1.2em; border-bottom: 2px solid ${modeColor};`);
 
-        // 5. Build final UI links and perform initial sync
         this.applyMode();
         this.world.syncThemeToWorker(); // Force initial color sync (THEME_WORLD_DESIGN §3.4.1)
         this.initThemeSelector();
+        this.initCollapsibleSections();
+        this.initVersionDisplay();
         await this.init();
+    }
+
+    private initVersionDisplay() {
+        const el = document.getElementById('app-version');
+        if (el) el.innerText = __APP_VERSION__;
     }
 
     private initThemeSelector() {
@@ -102,33 +114,54 @@ class AetherisPlayground {
 
     /** Updates static UI elements to reflect the active mode. */
     private updateBadgeStatus(status: 'live' | 'isolated' | 'offline' | 'reconnecting') {
-        const badge = document.getElementById('mode-badge');
-        if (!badge) return;
+        const infraBadge = document.getElementById('infra-badge');
+        const engineBadge = document.getElementById('engine-badge');
+        if (!infraBadge || !engineBadge) return;
 
         switch (status) {
             case 'live':
-                badge.innerText = 'INFRA: LIVE';
-                badge.style.background = 'color-mix(in srgb, var(--accent-success) 10%, transparent)';
-                badge.style.color = 'var(--accent-success)';
-                badge.style.borderColor = 'var(--accent-success)';
+                infraBadge.innerText = 'INFRA: LIVE';
+                infraBadge.style.background = 'color-mix(in srgb, var(--accent-success) 10%, transparent)';
+                infraBadge.style.color = 'var(--accent-success)';
+                infraBadge.style.borderColor = 'var(--accent-success)';
+
+                engineBadge.innerText = 'ENGINE: SERVER CTRL';
+                engineBadge.style.background = 'color-mix(in srgb, var(--accent-success) 10%, transparent)';
+                engineBadge.style.color = 'var(--accent-success)';
+                engineBadge.style.borderColor = 'var(--accent-success)';
                 break;
             case 'isolated':
-                badge.innerText = 'MODE: SANDBOX';
-                badge.style.background = 'color-mix(in srgb, var(--accent-primary) 10%, transparent)';
-                badge.style.color = 'var(--accent-primary)';
-                badge.style.borderColor = 'var(--accent-primary)';
+                infraBadge.innerText = 'INFRA: NONE';
+                infraBadge.style.background = 'color-mix(in srgb, var(--text-muted) 10%, transparent)';
+                infraBadge.style.color = 'var(--text-muted)';
+                infraBadge.style.borderColor = 'var(--border-subtle)';
+
+                engineBadge.innerText = 'ENGINE: LOCAL SIM';
+                engineBadge.style.background = 'color-mix(in srgb, var(--accent-primary) 10%, transparent)';
+                engineBadge.style.color = 'var(--accent-primary)';
+                engineBadge.style.borderColor = 'var(--accent-primary)';
                 break;
             case 'offline':
-                badge.innerText = 'INFRA: OFFLINE';
-                badge.style.background = 'color-mix(in srgb, var(--accent-danger) 10%, transparent)';
-                badge.style.color = 'var(--accent-danger)';
-                badge.style.borderColor = 'var(--accent-danger)';
+                infraBadge.innerText = 'INFRA: OFFLINE';
+                infraBadge.style.background = 'color-mix(in srgb, var(--accent-danger) 10%, transparent)';
+                infraBadge.style.color = 'var(--accent-danger)';
+                infraBadge.style.borderColor = 'var(--accent-danger)';
+
+                engineBadge.innerText = 'ENGINE: HALTED';
+                engineBadge.style.background = 'color-mix(in srgb, var(--accent-danger) 10%, transparent)';
+                engineBadge.style.color = 'var(--accent-danger)';
+                engineBadge.style.borderColor = 'var(--accent-danger)';
                 break;
             case 'reconnecting':
-                badge.innerText = 'INFRA: RECONNECTING';
-                badge.style.background = 'color-mix(in srgb, var(--accent-warning) 10%, transparent)';
-                badge.style.color = 'var(--accent-warning)';
-                badge.style.borderColor = 'var(--accent-warning)';
+                infraBadge.innerText = 'INFRA: RECONNECTING';
+                infraBadge.style.background = 'color-mix(in srgb, var(--accent-warning) 10%, transparent)';
+                infraBadge.style.color = 'var(--accent-warning)';
+                infraBadge.style.borderColor = 'var(--accent-warning)';
+
+                engineBadge.innerText = 'ENGINE: BLOCKED';
+                engineBadge.style.background = 'color-mix(in srgb, var(--accent-warning) 10%, transparent)';
+                engineBadge.style.color = 'var(--accent-warning)';
+                engineBadge.style.borderColor = 'var(--accent-warning)';
                 break;
         }
     }
@@ -136,20 +169,21 @@ class AetherisPlayground {
     private applyMode() {
         const sectionEntities = document.getElementById('section-entities');
         const sectionSimulation = document.getElementById('section-simulation');
-        const subtitle = document.getElementById('playground-subtitle');
-
+        const sectionSystem = document.getElementById('section-system');
         if (CONNECTED_MODE) {
             document.title = "Aetheris Playground — Live Mode";
             this.updateBadgeStatus('live');
-            if (subtitle) subtitle.innerText = 'Server Authority — Data Plane Active';
             // Spawner/simulation controls are server-authoritative in this mode, but hidden until login
             if (sectionEntities) sectionEntities.style.display = 'none';
             if (sectionSimulation) sectionSimulation.style.display = 'none';
+            if (sectionSystem) sectionSystem.style.display = 'flex';
+            const authSection = document.getElementById('section-auth');
+            if (authSection) authSection.style.display = 'flex';
         } else {
             document.title = "Aetheris Playground — Sandbox Mode";
             this.updateBadgeStatus('isolated');
-            if (subtitle) subtitle.innerText = 'Local Blueprint — No Server Required';
             if (sectionSimulation) sectionSimulation.style.display = 'flex';
+            if (sectionSystem) sectionSystem.style.display = 'flex';
             const authSection = document.getElementById('section-auth');
             if (authSection) authSection.style.display = 'none';
         }
@@ -161,6 +195,12 @@ class AetherisPlayground {
 
             this.gameWorker.postMessage({ type: 'pause_toggle', payload: { paused } });
             this.renderWorker.postMessage({ type: 'pause_toggle', payload: { paused } });
+
+            if (paused) {
+                this.heldKeys.clear();
+                this.updateInputUI();
+                this.gameWorker.postMessage({ type: 'clear_keys' });
+            }
         });
 
         // M10105 — Reliable teardown: ensure telemetry is flushed before tab closes.
@@ -312,9 +352,29 @@ class AetherisPlayground {
             // Use the registry's own event handler. If it returns false, the shortcut
             // was not handled and we potentially forward it to the game.
             if (!shortcuts.handleEvent(e) && canvas.style.display !== 'none') {
+                // Prevent scrolling for Arrow keys when focused on the engine
+                if (e.key.startsWith('Arrow')) {
+                    e.preventDefault();
+                }
+
+                if (!this.heldKeys.has(e.code)) {
+                    this.heldKeys.add(e.code);
+                    this.updateInputUI();
+                    this.gameWorker.postMessage({
+                        type: 'key_down',
+                        payload: { key: e.code, shift: e.shiftKey, ctrl: e.ctrlKey, alt: e.altKey }
+                    });
+                }
+            }
+        });
+
+        window.addEventListener('keyup', (e) => {
+            if (this.heldKeys.has(e.code)) {
+                this.heldKeys.delete(e.code);
+                this.updateInputUI();
                 this.gameWorker.postMessage({
-                    type: 'key_down',
-                    payload: { key: e.key, shift: e.shiftKey, ctrl: e.ctrlKey, alt: e.altKey }
+                    type: 'key_up',
+                    payload: { key: e.code }
                 });
             }
         });
@@ -475,6 +535,9 @@ class AetherisPlayground {
                         sessionStatLogin.style.color = 'var(--accent-success)';
                     }
 
+                    const authInputs = document.getElementById('auth-inputs');
+                    if (authInputs) authInputs.style.display = 'none';
+
                     const logoutBtnLogin = document.getElementById('btn-logout');
                     if (logoutBtnLogin) logoutBtnLogin.style.display = 'block';
 
@@ -483,6 +546,9 @@ class AetherisPlayground {
 
                     const sectionEntitiesLogin = document.getElementById('section-entities');
                     if (sectionEntitiesLogin) sectionEntitiesLogin.style.display = 'flex';
+
+                    const sectionSystemLogin = document.getElementById('section-system');
+                    if (sectionSystemLogin) sectionSystemLogin.style.display = 'flex';
 
                     this.gameWorker.postMessage({
                         type: 'connect',
@@ -496,11 +562,22 @@ class AetherisPlayground {
                 }
 
                 case 'connection_ready': {
-                    this.statusEl.innerText = `CONNECTED — ${payload.clientId}`;
+                    this.statusEl.classList.remove('error');
+                    this.statusEl.style.display = 'none'; // Hide the generic status line as requested
                     this.updateBadgeStatus('live');
 
                     const authSection = document.getElementById('section-auth');
-                    if (authSection) authSection.style.display = 'none';
+                    if (authSection) authSection.style.display = 'flex';
+
+                    const startBtn = document.getElementById('btn-start');
+                    if (startBtn) startBtn.style.display = 'block';
+
+                    const clientIdRow = document.getElementById('stat-client-id-row');
+                    const clientIdVal = document.getElementById('stat-client-id');
+                    if (clientIdRow && clientIdVal) {
+                        clientIdVal.innerText = payload.clientId;
+                        clientIdRow.style.display = 'flex';
+                    }
 
                     this.startMonitoring();
                     console.log(`[Playground] Connected mode live. clientId=${payload.clientId}`);
@@ -508,22 +585,39 @@ class AetherisPlayground {
                 }
 
                 case 'connection_error': {
-                    let msg = (payload.reason instanceof Error)
+                    const rawMsg = (payload.reason instanceof Error)
                         ? payload.reason.message
                         : String(payload.reason ?? 'Unknown error');
-                    if (msg.includes('Invalid') || msg.includes('Unauthenticated') || msg.includes('Bad') || msg.includes('OTP')) {
-                        msg = 'OTP verification failed — is AETHERIS_AUTH_BYPASS enabled?';
+
+                    let displayMsg = rawMsg;
+                    if (rawMsg.includes('Invalid') || rawMsg.includes('Unauthenticated') || rawMsg.includes('Bad') || rawMsg.includes('OTP')) {
+                        displayMsg = `Auth Failed: ${rawMsg} (Check AETHERIS_AUTH_BYPASS)`;
+                    } else if (rawMsg.includes('Rate limit')) {
+                        displayMsg = `Rate Limited: ${rawMsg}. Please wait a moment.`;
                     }
-                    this.statusEl.innerText = `ERROR: ${msg}`;
+
+                    this.statusEl.style.display = 'block'; // Ensure errors are always visible
+                    this.statusEl.classList.add('error');
+                    this.statusEl.innerText = `ERROR: ${displayMsg}`;
                     this.updateBadgeStatus('offline');
-                    console.error('[Playground] Connection error:', msg);
+
+                    const clientIdRowErr = document.getElementById('stat-client-id-row');
+                    if (clientIdRowErr) clientIdRowErr.style.display = 'none';
+
+                    console.error('[Playground] Connection error:', rawMsg);
                     break;
                 }
 
-                case 'reconnecting':
+                case 'reconnecting': {
+                    this.statusEl.style.display = 'block'; // Make sure the status is visible
+                    this.statusEl.classList.remove('error');
                     this.statusEl.innerText = 'RECONNECTING...';
                     this.updateBadgeStatus('reconnecting');
+
+                    const clientIdRowRec = document.getElementById('stat-client-id-row');
+                    if (clientIdRowRec) clientIdRowRec.style.display = 'none';
                     break;
+                }
 
                 case 'logout_success':
                     window.location.reload();
@@ -531,13 +625,38 @@ class AetherisPlayground {
 
                 case 'wasm_metrics':
                     this.updateWasmMetrics(payload);
+                    if (e.data.manifest) {
+                        const manifestObj = (e.data.manifest instanceof Map)
+                            ? Object.fromEntries(e.data.manifest)
+                            : e.data.manifest;
+
+                        // Deterministic stringify by sorting keys
+                        const sortedKeys = Object.keys(manifestObj).sort();
+                        const manifestStr = JSON.stringify(sortedKeys.map(k => [k, manifestObj[k]]));
+
+                        if (manifestStr !== this.lastLoggedManifest) {
+                            const isFirstLog = this.lastLoggedManifest === '';
+                            this.lastLoggedManifest = manifestStr;
+
+                            if (isFirstLog) {
+                                console.log('[Playground] System Manifest initial state:', e.data.manifest);
+                            } else {
+                                console.log('[Playground] System Manifest changed:', e.data.manifest);
+                            }
+                        } else {
+                            console.debug('[Playground] System Manifest (idempotent)');
+                        }
+
+                        this.updateSystemManifest(e.data.manifest);
+                    }
                     break;
             }
         };
     }
 
     /** Spawns a single entity at a random position. */
-    spawn(type: number) {
+    spawn(type: number, event?: MouseEvent) {
+        if (event) (event.target as HTMLElement).blur();
         this.entityCount++;
         const x = (Math.random() - 0.5) * 40;
         const y = (Math.random() - 0.5) * 40;
@@ -550,7 +669,8 @@ class AetherisPlayground {
     }
 
     /** Spawns $N$ randomized entities for performance testing. */
-    stressTest(count: number) {
+    stressTest(count: number, event?: MouseEvent) {
+        if (event) (event.target as HTMLElement).blur();
         // Get rotation state from radio buttons
         const rotationOn = (document.querySelector('input[name="rotation"]:checked') as HTMLInputElement)?.value === 'true';
 
@@ -570,11 +690,142 @@ class AetherisPlayground {
         });
     }
 
+    /** Starts the simulation by clearing the world and spawning a ship + asteroids. */
+    start(event?: MouseEvent) {
+        if (event) (event.target as HTMLElement).blur();
+
+        if (!CONNECTED_MODE) {
+            console.warn('[Playground] Start logic only optimized for CONNECTED mode currently.');
+        }
+
+        // 1. Clear world first so isSessionActive is reset before we set it.
+        this.clear();
+
+        // 2. Now mark session as active and update the UI.
+        this.isSessionActive = true;
+        this.updateSessionUI();
+
+        // 3. Request session ship with Possession from the server.
+        // The server spawns an Interceptor (type 1) and sends back a Possession event.
+        this.gameWorker.postMessage({ type: 'start_session' });
+
+        // 4. Spawn a cluster of asteroids to mine
+        for (let i = 0; i < 6; i++) {
+            const angle = (i / 6) * Math.PI * 2 + (Math.random() * 0.5);
+            const dist = 6 + Math.random() * 8;
+            this.gameWorker.postMessage({
+                type: 'p_spawn',
+                payload: {
+                    type: 5, // Asteroid
+                    x: Math.cos(angle) * dist,
+                    y: Math.sin(angle) * dist,
+                    rot: Math.random() * Math.PI * 2
+                }
+            });
+        }
+
+        this.entityCount = 7;
+        this.updateEntityCount();
+        this.statusEl.innerText = 'SESSION STARTED — Entities Spawned';
+    }
+
     /** Clears all entities from the playground. */
-    clear() {
+    clear(event?: MouseEvent) {
+        if (event) (event.target as HTMLElement).blur();
+        this.isSessionActive = false;
+        this.updateSessionUI();
+
         this.entityCount = 0;
         this.gameWorker.postMessage({ type: 'p_clear' });
         this.updateEntityCount();
+    }
+
+    private updateSessionUI() {
+        const btn = document.getElementById('btn-start');
+        if (!btn) return;
+
+        if (this.isSessionActive) {
+            btn.innerText = 'Stop Session (Clear World)';
+            btn.classList.add('danger');
+            btn.classList.remove('primary');
+            btn.style.display = 'block';
+        } else {
+            btn.innerText = 'Start Session (Spawn Ship)';
+            btn.classList.add('primary');
+            btn.classList.remove('danger');
+            btn.style.display = 'block';
+        }
+    }
+
+
+    private initCollapsibleSections() {
+        const sections = document.querySelectorAll('.section');
+        sections.forEach(section => {
+            const title = section.querySelector('.section-title');
+            if (title) {
+                const toggle = () => {
+                    section.classList.toggle('collapsed');
+                    title.setAttribute('aria-expanded',
+                        section.classList.contains('collapsed') ? 'false' : 'true');
+                };
+                // Mouse
+                title.addEventListener('click', toggle);
+                // Keyboard
+                title.setAttribute('tabindex', '0');
+                title.setAttribute('role', 'button');
+                title.setAttribute('aria-expanded', 'true');
+                title.addEventListener('keydown', (e: Event) => {
+                    const ke = e as KeyboardEvent;
+                    if (ke.key === 'Enter' || ke.key === ' ') {
+                        ke.preventDefault();
+                        toggle();
+                    }
+                });
+            }
+        });
+    }
+
+    private updateSystemManifest(manifest: any) {
+        const container = document.getElementById('system-info');
+        if (!container) return;
+
+        // WASM BTreeMap may arrive as a JS Map or a plain Record
+        let data = (manifest instanceof Map) ? Object.fromEntries(manifest) : { ...manifest };
+
+        // Only re-render if data actually changed to avoid DOM thrashing
+        const currentHash = JSON.stringify(data);
+        if ((container as any)._lastHash === currentHash) return;
+        (container as any)._lastHash = currentHash;
+
+        const entries = Object.entries(data);
+        if (entries.length === 0) {
+            container.style.display = 'none';
+            return;
+        }
+
+        container.style.display = 'flex';
+
+        // Build rows via DOM API so server-supplied keys/values are never parsed as HTML.
+        container.innerHTML = '';
+        for (const [key, val] of entries) {
+            const row = document.createElement('div');
+            row.className = 'stat';
+
+            const labelEl = document.createElement('span');
+            labelEl.className = 'label';
+            labelEl.style.textTransform = 'capitalize';
+            labelEl.textContent = key.replace(/_/g, ' ');
+
+            const valueEl = document.createElement('span');
+            valueEl.className = 'value';
+            valueEl.style.fontSize = '0.65rem';
+            valueEl.style.fontFamily = 'var(--world-font-mono)';
+            valueEl.textContent = String(val);
+
+            row.appendChild(labelEl);
+            row.appendChild(valueEl);
+            container.appendChild(row);
+        }
     }
 
     private updateEntityCount() {
@@ -672,6 +923,40 @@ class AetherisPlayground {
     logout() {
         if (!CONNECTED_MODE) return;
         this.gameWorker.postMessage({ type: 'logout', payload: {} });
+    }
+
+    refreshManifest() {
+        if (!CONNECTED_MODE) return;
+        console.log('[Playground] Manual manifest refresh requested');
+        this.gameWorker.postMessage({ type: 'p_request_metrics' });
+    }
+
+    private updateInputUI() {
+        const badges = document.querySelectorAll('.key-badge');
+        badges.forEach(badge => {
+            const key = badge.getAttribute('data-key');
+            if (key) {
+                // Special mapping: 'Space' data-key needs to match KeyboardEvent.code 'Space'
+                // WASD mapping: 'KeyW', 'KeyA', etc. match e.code.
+                // Arrow mapping: we mirror them to WASD indicators if that's the intent, 
+                // OR we just track exactly what the data-key says.
+                // The badges in HTML are: KeyW, KeyA, KeyS, KeyD, KeyQ, KeyE, Space, KeyF.
+
+                let active = this.heldKeys.has(key);
+
+                // Mirror Arrows to WASD badges for visual feedback
+                if (key === 'KeyW' && this.heldKeys.has('ArrowUp')) active = true;
+                if (key === 'KeyS' && this.heldKeys.has('ArrowDown')) active = true;
+                if (key === 'KeyA' && this.heldKeys.has('ArrowLeft')) active = true;
+                if (key === 'KeyD' && this.heldKeys.has('ArrowRight')) active = true;
+
+                if (active) {
+                    badge.classList.add('active');
+                } else {
+                    badge.classList.remove('active');
+                }
+            }
+        });
     }
 }
 

@@ -13,6 +13,7 @@ let isBusy = false;
 let lastConnectParams: { url: string, token: string, certHash?: Uint8Array } | null = null;
 let reconnectAttemptCount = 0;
 let isReconnecting = false;
+const heldKeys = new Set<string>();
 
 // M10105 — FIFO Queue for UI commands to prevent async race conditions
 const commandQueue: ((c: AetherisClient) => Promise<void> | void)[] = [];
@@ -94,13 +95,85 @@ function withClient(op: (c: AetherisClient) => (Promise<void> | void)): Promise<
  * Satisfies M10105 AC-01 (Safe to call before client init).
  */
 function bootstrapSystems() {
-    const telemetryUrl = import.meta.env.VITE_TELEMETRY_URL || 'http://127.0.0.1:50055';
-    wasm_init_telemetry(telemetryUrl);
+    const telemetryUrl = import.meta.env.VITE_TELEMETRY_URL || '';
+    if (telemetryUrl) {
+        wasm_init_telemetry(telemetryUrl);
+    }
 
     if (flushIntervalId) clearInterval(flushIntervalId);
     flushIntervalId = setInterval(() => {
         try { wasm_flush_telemetry(); } catch { /* non-fatal */ }
     }, 5000);
+}
+
+
+let manifestPollCounter = 0;
+let lastLoggedManifestWorker = '';
+
+/**
+ * Runs a single metrics poll cycle without scheduling the next one.
+ * Use this for immediate/on-demand polls to avoid creating duplicate loops.
+ */
+async function pollMetricsOnce(forceManifest: boolean = false) {
+    manifestPollCounter++;
+    const shouldRequestManifest = forceManifest || manifestPollCounter >= 10;
+    if (shouldRequestManifest) manifestPollCounter = 0;
+
+    try {
+        const metrics = wasm_get_metrics();
+        if (client) {
+            await withClient(async (c) => {
+                // 1. Periodic request from server (throttled to 10s)
+                if (shouldRequestManifest) {
+                    console.log(`[GameWorker] Outgoing System Manifest request (force=${forceManifest})...`);
+                    await c.request_system_manifest();
+                }
+
+                // 2. Continuous retrieval from local WASM state (polled every 1s)
+                // This ensures we catch the server response as soon as it arrives,
+                // regardless of the outgoing request throttle.
+                const manifest = (c as any).get_system_info();
+
+                if (manifest && ((manifest instanceof Map && manifest.size > 0) || (Object.keys(manifest).length > 0))) {
+                    const manifestObj = (manifest instanceof Map) ? Object.fromEntries(manifest) : (manifest as any);
+
+                    // Deterministic stringify by sorting keys to avoid false-positive changes
+                    const sortedKeys = Object.keys(manifestObj).sort();
+                    const manifestStr = JSON.stringify(sortedKeys.map(k => [k, manifestObj[k]]));
+
+                    if (manifestStr !== lastLoggedManifestWorker) {
+                        lastLoggedManifestWorker = manifestStr;
+                        // We don't log in the worker anymore to avoid redundancy with the main thread,
+                        // but we still de-duplicate here to save IPC bandwidth.
+                        self.postMessage({ type: 'wasm_metrics', payload: metrics, manifest });
+                    } else {
+                        self.postMessage({ type: 'wasm_metrics', payload: metrics });
+                    }
+                } else {
+                    self.postMessage({ type: 'wasm_metrics', payload: metrics });
+                }
+            });
+        } else if (metrics) {
+            self.postMessage({ type: 'wasm_metrics', payload: metrics });
+        }
+    } catch (e) {
+        /* non-fatal */
+    }
+}
+
+/**
+ * Consolidated metrics polling scheduler (M10105 / M10115).
+ * Calls pollMetricsOnce then re-arms itself. Never call this directly for
+ * immediate/one-shot polls — use pollMetricsOnce() instead to avoid creating
+ * duplicate scheduler loops.
+ */
+async function pollMetrics(forceManifest: boolean = false) {
+    if (isPaused) {
+        metricsIntervalId = setTimeout(pollMetrics, 1000);
+        return;
+    }
+    await pollMetricsOnce(forceManifest);
+    metricsIntervalId = setTimeout(pollMetrics, 1000);
 }
 
 self.onmessage = async (e) => {
@@ -122,6 +195,15 @@ self.onmessage = async (e) => {
         console.debug('[GameWorker] Finalizing telemetry before shutdown...');
         try { wasm_flush_telemetry(); } catch { /* ignore */ }
 
+    } else if (type === 'key_down') {
+        heldKeys.add(payload.key);
+    } else if (type === 'key_up') {
+        heldKeys.delete(payload.key);
+    } else if (type === 'clear_keys') {
+        heldKeys.clear();
+    } else if (type === 'pause_toggle') {
+        isPaused = typeof payload?.paused === 'boolean' ? payload.paused : !isPaused;
+        self.postMessage({ type: 'pause_state', payload: { paused: isPaused } });
     } else if (type === 'init_playground') {
         console.debug('[GameWorker] Received init_playground');
         await init({ module_or_path: wasmUrl, memory });
@@ -138,28 +220,16 @@ self.onmessage = async (e) => {
                 simIntervalId = setTimeout(tickLoop, 500); // Throttled check
                 return;
             }
-            withClient((c) => c.tick_playground());
+            withClient((c) => {
+                const input = computeInput(0); // Tick doesn't matter much for local apply
+                c.playground_apply_input(input.move_x, input.move_y, input.actions_mask);
+                c.tick_playground();
+            });
             simIntervalId = setTimeout(tickLoop, 1000 / 60);
         };
         simIntervalId = setTimeout(tickLoop, 0);
 
-        // M10105 — poll WASM metrics every 1s and send to main thread
         if (metricsIntervalId) clearTimeout(metricsIntervalId as number);
-        const pollMetrics = () => {
-            if (isPaused) {
-                metricsIntervalId = setTimeout(pollMetrics, 1000);
-                return;
-            }
-            try {
-                const metrics = wasm_get_metrics();
-                if (metrics) {
-                    self.postMessage({ type: 'wasm_metrics', payload: metrics });
-                }
-            } catch (e) {
-                /* non-fatal */
-            }
-            metricsIntervalId = setTimeout(pollMetrics, 1000);
-        };
         metricsIntervalId = setTimeout(pollMetrics, 1000);
 
     } else if (type === 'metrics_frame') {
@@ -201,6 +271,11 @@ self.onmessage = async (e) => {
             await c.playground_stress_test(payload.count, payload.rotate);
             console.log(`[GameWorker] playground_stress_test() WASM call dispatched — waiting for server response`);
         });
+    } else if (type === 'start_session') {
+        console.log('[GameWorker] StartSession requested — asking server for session ship + Possession');
+        withClient(async (c) => {
+            await c.start_session_net();
+        });
     } else if (type === 'request_otp') {
         try {
             if (!client) throw new Error('Client not initialized');
@@ -226,19 +301,30 @@ self.onmessage = async (e) => {
             self.postMessage({ type: 'connection_error', payload: { reason: (err as any), retriable: true } });
         }
 
+    } else if (type === 'p_request_metrics') {
+        // Manually trigger a one-shot metrics poll (M10105 / M10115).
+        // Use pollMetricsOnce to avoid spawning a duplicate scheduler loop.
+        pollMetricsOnce(true).catch(e => console.error('[GameWorker] Manual metrics poll failed:', e));
     } else if (type === 'connect') {
         const { url, token, certHash: certHashStr } = payload;
-        const certHash = certHashStr ? Uint8Array.from(atob(certHashStr), c => c.charCodeAt(0)) : undefined;
+        console.debug(`[GameWorker] Connect requested: url=${url}, token=${token ? '***' : 'MISSING'}, certHash=${certHashStr || 'NONE'}`);
+
+        const certHash = certHashStr ? Uint8Array.from(atob(certHashStr.trim()), c => c.charCodeAt(0)) : undefined;
+        if (certHash) {
+            console.debug(`[GameWorker] Decoded certHash: ${certHash.length} bytes`);
+        }
 
         try {
             if (!client) {
                 throw new Error('client not initialized');
             }
-            client.set_session_token(token);
             lastConnectParams = { url, token, certHash };
             reconnectAttemptCount = 0;
 
-            await client.connect(url, certHash);
+            await withClient(async (c) => {
+                c.set_session_token(token);
+                await c.connect(url, certHash);
+            });
 
             self.postMessage({
                 type: 'connection_ready',
@@ -246,6 +332,7 @@ self.onmessage = async (e) => {
             });
 
             if (simIntervalId) clearTimeout(simIntervalId);
+            let localInputTick = 0n;
             const tickLoop = async () => {
                 if (isPaused) {
                     simIntervalId = setTimeout(tickLoop, 500);
@@ -253,11 +340,23 @@ self.onmessage = async (e) => {
                 }
 
                 await withClient(async (c) => {
+                    // M10146 — Send input to server before ticking
+                    // We must use a monotonically increasing tick for inputs, 
+                    // otherwise the server's anti-replay measure (Kind=128) drops inputs 
+                    // generated within the same server tick window.
+                    if (localInputTick === 0n) {
+                        // Initialize sequence to a reasonable tick context
+                        localInputTick = BigInt(c.latest_tick()) || 1n;
+                    }
+
+                    const input = computeInput(Number(localInputTick));
+                    await c.send_input(localInputTick, input.move_x, input.move_y, input.actions_mask, null);
+                    localInputTick++;
+
                     await c.tick();
 
                     // M10146 — Check for disconnected state and trigger reconnection
                     if (c.connection_state === 0) { // 0 is Disconnected
-                        // Wait, I should check the enum values for ConnectionState
                         attemptReconnection();
                     }
                 });
@@ -266,24 +365,9 @@ self.onmessage = async (e) => {
             };
             simIntervalId = setTimeout(tickLoop, 0);
 
-            // M10105 — poll WASM metrics every 1s and send to main thread
-            if (metricsIntervalId) clearTimeout(metricsIntervalId as number);
-            const pollMetrics = () => {
-                if (isPaused) {
-                    metricsIntervalId = setTimeout(pollMetrics, 1000);
-                    return;
-                }
-                try {
-                    const metrics = wasm_get_metrics();
-                    if (metrics) {
-                        self.postMessage({ type: 'wasm_metrics', payload: metrics });
-                    }
-                } catch (e) {
-                    /* non-fatal */
-                }
-                metricsIntervalId = setTimeout(pollMetrics, 1000);
-            };
-            metricsIntervalId = setTimeout(pollMetrics, 1000);
+            // Reset manifest cache to ensure the new UI instance receives it
+            lastLoggedManifestWorker = '';
+            pollMetricsOnce(true).catch(e => console.error('[GameWorker] Initial manifest poll failed:', e));
         } catch (err) {
             console.error('[GameWorker] Connection failed:', err);
             self.postMessage({ type: 'connection_error', payload: { reason: (err as any).toString(), retriable: true } });
@@ -302,24 +386,29 @@ self.onmessage = async (e) => {
             if (simIntervalId) clearInterval(simIntervalId);
             self.postMessage({ type: 'logout_error', error: err?.message || String(err) });
         }
-    } else if (type === 'key_down') {
-        // Handle key down in Rust client if it exposes input methods
-        // console.log('[GameWorker] Key down:', payload.key);
-    } else if (type === 'mouse_move') {
-        // Handle mouse move
-        // console.log('[GameWorker] Mouse move:', payload.dx, payload.dy);
-    } else if (type === 'input') {
-        // payload is Uint8Array, buffer is already detached on main thread
-        // console.log('[GameWorker] Received bulk input, size:', payload.length);
-    } else if (type === 'pause_toggle') {
-        const { paused } = payload;
-        isPaused = paused;
-        console.log(`[GameWorker] Paused state set to: ${isPaused}`);
-        if (!isPaused) {
-            // Force a flush telemetry on resume to ensure we have fresh data
-            try { wasm_flush_telemetry(); } catch { /* ignore */ }
-        }
     }
 };
+
+/**
+ * Computes an InputFrame from the currently held keys.
+ * Maps WASD/Arrows to move_x/move_y and Space/F to action bits.
+ */
+function computeInput(tick: number) {
+    let move_x = 0;
+    let move_y = 0;
+    let actions_mask = 0;
+
+    // Movement (WASD + Arrows)
+    if (heldKeys.has('KeyW') || heldKeys.has('ArrowUp')) move_y = 1.0;
+    if (heldKeys.has('KeyS') || heldKeys.has('ArrowDown')) move_y = -1.0;
+    if (heldKeys.has('KeyA') || heldKeys.has('ArrowLeft')) move_x = -1.0;
+    if (heldKeys.has('KeyD') || heldKeys.has('ArrowRight')) move_x = 1.0;
+
+    // Specific Actions
+    if (heldKeys.has('Space')) actions_mask |= 0x01; // FirePrimary
+    if (heldKeys.has('KeyF')) actions_mask |= 0x02; // ToggleMining
+
+    return { tick, move_x, move_y, actions_mask };
+}
 
 

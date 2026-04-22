@@ -234,21 +234,130 @@ export class ShortcutRegistry {
         // Header
         const header = document.createElement('div');
         header.className = 'shortcut-modal-header';
-        const title = document.createElement('span');
-        title.className = 'shortcut-modal-title';
-        title.textContent = 'Keyboard Shortcuts';
+
+        const tabsContainer = document.createElement('div');
+        tabsContainer.className = 'shortcut-modal-tabs';
+
+        const tabShortcuts = document.createElement('button');
+        tabShortcuts.className = 'shortcut-tab active';
+        tabShortcuts.textContent = 'Keyboard Shortcuts';
+
+        const tabHelp = document.createElement('button');
+        tabHelp.className = 'shortcut-tab';
+        tabHelp.textContent = 'Status Badges';
+
+        const tabTelemetry = document.createElement('button');
+        tabTelemetry.className = 'shortcut-tab';
+        tabTelemetry.textContent = 'Telemetry';
+
+        tabsContainer.appendChild(tabShortcuts);
+        tabsContainer.appendChild(tabHelp);
+        tabsContainer.appendChild(tabTelemetry);
+
         const closeBtn = document.createElement('button');
         closeBtn.className = 'shortcut-close-btn';
         closeBtn.id = 'shortcut-close-btn';
         closeBtn.setAttribute('aria-label', 'Close shortcuts overlay');
         closeBtn.textContent = '\u2715';
         closeBtn.addEventListener('click', () => this.hideOverlay());
-        header.appendChild(title);
+
+        header.appendChild(tabsContainer);
         header.appendChild(closeBtn);
 
         // Body
         const body = document.createElement('div');
         body.className = 'shortcut-modal-body';
+
+        const shortcutsContent = document.createElement('div');
+        shortcutsContent.className = 'shortcut-tab-content active';
+
+        const helpContent = document.createElement('div');
+        helpContent.className = 'shortcut-tab-content';
+
+        // Build help sections via DOM API (no innerHTML).
+        type BadgeSpec = { text: string; color: string; border: string; bg: string };
+        const makeSection = (badges: BadgeSpec[], bodyText: string) => {
+            const section = document.createElement('div');
+            section.className = 'help-doc-section';
+            const title = document.createElement('div');
+            title.className = 'help-doc-title';
+            for (const b of badges) {
+                const badge = document.createElement('span');
+                badge.className = 'mode-badge';
+                badge.style.color = b.color;
+                badge.style.borderColor = b.border;
+                badge.style.background = b.bg;
+                badge.textContent = b.text;
+                title.appendChild(badge);
+            }
+            const body = document.createElement('div');
+            body.textContent = bodyText;
+            section.appendChild(title);
+            section.appendChild(body);
+            return section;
+        };
+        const mix = (v: string) => `color-mix(in srgb, ${v} 10%, transparent)`;
+        helpContent.appendChild(makeSection(
+            [
+                { text: 'INFRA: LIVE', color: 'var(--accent-success)', border: 'var(--accent-success)', bg: mix('var(--accent-success)') },
+                { text: 'ENGINE: SERVER CTRL', color: 'var(--accent-success)', border: 'var(--accent-success)', bg: mix('var(--accent-success)') },
+            ],
+            'Playground connected to Game Server. State is authoritative.'
+        ));
+        helpContent.appendChild(makeSection(
+            [
+                { text: 'INFRA: NONE', color: 'var(--text-muted)', border: 'var(--border-subtle)', bg: mix('var(--text-muted)') },
+                { text: 'ENGINE: LOCAL SIM', color: 'var(--accent-primary)', border: 'var(--accent-primary)', bg: mix('var(--accent-primary)') },
+            ],
+            'Offline Sandbox Mode. Engine runs locally via WebAssembly without a server.'
+        ));
+        helpContent.appendChild(makeSection(
+            [
+                { text: 'INFRA: OFFLINE', color: 'var(--accent-danger)', border: 'var(--accent-danger)', bg: mix('var(--accent-danger)') },
+                { text: 'ENGINE: HALTED', color: 'var(--accent-danger)', border: 'var(--accent-danger)', bg: mix('var(--accent-danger)') },
+            ],
+            'Connection lost or rate limited. Engine stops accepting input until restored.'
+        ));
+        helpContent.appendChild(makeSection(
+            [
+                { text: 'INFRA: RECONNECTING', color: 'var(--accent-warning)', border: 'var(--accent-warning)', bg: mix('var(--accent-warning)') },
+                { text: 'ENGINE: BLOCKED', color: 'var(--accent-warning)', border: 'var(--accent-warning)', bg: mix('var(--accent-warning)') },
+            ],
+            'Attempting to restore session. Simulation is paused to prevent state desync.'
+        ));
+
+        const telemetryContent = document.createElement('div');
+        telemetryContent.className = 'shortcut-tab-content';
+
+        // Build telemetry sections via DOM API (no innerHTML).
+        const makeTelSection = (titleText: string, bodyText: string) => {
+            const section = document.createElement('div');
+            section.className = 'help-doc-section';
+            const title = document.createElement('div');
+            title.className = 'help-doc-title';
+            title.textContent = titleText;
+            const body = document.createElement('div');
+            body.textContent = bodyText;
+            section.appendChild(title);
+            section.appendChild(body);
+            return section;
+        };
+        telemetryContent.appendChild(makeTelSection('FPS (Host)',
+            "Frames Per Second of the browser's Main Thread (UI and DOM rendering). High values mean a smooth interface."));
+        telemetryContent.appendChild(makeTelSection('FPS (WASM)',
+            'Frames Per Second of the distinct Render Worker running the WebAssembly engine. Represents the true engine tick rate.'));
+        telemetryContent.appendChild(makeTelSection('Frame Time (p99)',
+            'The 99th percentile time taken by the WASM render loop to draw a single frame to the WebGL canvas.'));
+        telemetryContent.appendChild(makeTelSection('Sim Time (p99)',
+            'The 99th percentile time taken by the game simulation (physics, collision, and authority logic) per tick.'));
+        telemetryContent.appendChild(makeTelSection('RTT',
+            'Round Trip Time. High-precision network latency measured over the active WebTransport connection. Represented in milliseconds.'));
+        telemetryContent.appendChild(makeTelSection('Entities',
+            'The total number of actor entities currently spawned and being simulated within the spatial grid.'));
+        telemetryContent.appendChild(makeTelSection('Dropped',
+            'The amount of predicted frames that were dropped or reverted because they failed server reconciliation due to desync.'));
+        telemetryContent.appendChild(makeTelSection('SAB',
+            'SharedArrayBuffer memory lock status. Indicates when WebAssembly workers are blocked waiting for atomic memory handoffs.'));
 
         for (const cat of sortedCategories) {
             const items = grouped.get(cat)!;
@@ -284,8 +393,25 @@ export class ShortcutRegistry {
                 group.appendChild(row);
             }
 
-            body.appendChild(group);
+            shortcutsContent.appendChild(group);
         }
+
+        body.appendChild(shortcutsContent);
+        body.appendChild(helpContent);
+        body.appendChild(telemetryContent);
+
+        // Tab Event Listeners
+        const updateTabs = (activeTab: HTMLButtonElement, activeContent: HTMLElement) => {
+            [tabShortcuts, tabHelp, tabTelemetry].forEach(btn => btn.classList.remove('active'));
+            [shortcutsContent, helpContent, telemetryContent].forEach(content => content.classList.remove('active'));
+
+            activeTab.classList.add('active');
+            activeContent.classList.add('active');
+        };
+
+        tabShortcuts.addEventListener('click', () => updateTabs(tabShortcuts, shortcutsContent));
+        tabHelp.addEventListener('click', () => updateTabs(tabHelp, helpContent));
+        tabTelemetry.addEventListener('click', () => updateTabs(tabTelemetry, telemetryContent));
 
         // Footer
         const footer = document.createElement('div');
