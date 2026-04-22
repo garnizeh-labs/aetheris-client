@@ -588,7 +588,7 @@ class AetherisPlayground {
                     const rawMsg = (payload.reason instanceof Error)
                         ? payload.reason.message
                         : String(payload.reason ?? 'Unknown error');
-                    
+
                     let displayMsg = rawMsg;
                     if (rawMsg.includes('Invalid') || rawMsg.includes('Unauthenticated') || rawMsg.includes('Bad') || rawMsg.includes('OTP')) {
                         displayMsg = `Auth Failed: ${rawMsg} (Check AETHERIS_AUTH_BYPASS)`;
@@ -600,7 +600,7 @@ class AetherisPlayground {
                     this.statusEl.classList.add('error');
                     this.statusEl.innerText = `ERROR: ${displayMsg}`;
                     this.updateBadgeStatus('offline');
-                    
+
                     const clientIdRowErr = document.getElementById('stat-client-id-row');
                     if (clientIdRowErr) clientIdRowErr.style.display = 'none';
 
@@ -608,15 +608,16 @@ class AetherisPlayground {
                     break;
                 }
 
-                case 'reconnecting':
+                case 'reconnecting': {
                     this.statusEl.style.display = 'block'; // Make sure the status is visible
                     this.statusEl.classList.remove('error');
                     this.statusEl.innerText = 'RECONNECTING...';
                     this.updateBadgeStatus('reconnecting');
-                    
+
                     const clientIdRowRec = document.getElementById('stat-client-id-row');
                     if (clientIdRowRec) clientIdRowRec.style.display = 'none';
                     break;
+                }
 
                 case 'logout_success':
                     window.location.reload();
@@ -625,18 +626,18 @@ class AetherisPlayground {
                 case 'wasm_metrics':
                     this.updateWasmMetrics(payload);
                     if (e.data.manifest) {
-                        const manifestObj = (e.data.manifest instanceof Map) 
-                            ? Object.fromEntries(e.data.manifest) 
+                        const manifestObj = (e.data.manifest instanceof Map)
+                            ? Object.fromEntries(e.data.manifest)
                             : e.data.manifest;
-                        
+
                         // Deterministic stringify by sorting keys
                         const sortedKeys = Object.keys(manifestObj).sort();
                         const manifestStr = JSON.stringify(sortedKeys.map(k => [k, manifestObj[k]]));
-                        
+
                         if (manifestStr !== this.lastLoggedManifest) {
                             const isFirstLog = this.lastLoggedManifest === '';
                             this.lastLoggedManifest = manifestStr;
-                            
+
                             if (isFirstLog) {
                                 console.log('[Playground] System Manifest initial state:', e.data.manifest);
                             } else {
@@ -645,7 +646,7 @@ class AetherisPlayground {
                         } else {
                             console.debug('[Playground] System Manifest (idempotent)');
                         }
-                        
+
                         this.updateSystemManifest(e.data.manifest);
                     }
                     break;
@@ -692,21 +693,23 @@ class AetherisPlayground {
     /** Starts the simulation by clearing the world and spawning a ship + asteroids. */
     start(event?: MouseEvent) {
         if (event) (event.target as HTMLElement).blur();
-        this.isSessionActive = true;
-        this.updateSessionUI();
 
         if (!CONNECTED_MODE) {
             console.warn('[Playground] Start logic only optimized for CONNECTED mode currently.');
         }
 
-        // 1. Clear world (reliable message)
+        // 1. Clear world first so isSessionActive is reset before we set it.
         this.clear();
 
-        // 2. Request session ship with Possession from the server.
+        // 2. Now mark session as active and update the UI.
+        this.isSessionActive = true;
+        this.updateSessionUI();
+
+        // 3. Request session ship with Possession from the server.
         // The server spawns an Interceptor (type 1) and sends back a Possession event.
         this.gameWorker.postMessage({ type: 'start_session' });
 
-        // 3. Spawn a cluster of asteroids to mine
+        // 4. Spawn a cluster of asteroids to mine
         for (let i = 0; i < 6; i++) {
             const angle = (i / 6) * Math.PI * 2 + (Math.random() * 0.5);
             const dist = 6 + Math.random() * 8;
@@ -760,8 +763,23 @@ class AetherisPlayground {
         sections.forEach(section => {
             const title = section.querySelector('.section-title');
             if (title) {
-                title.addEventListener('click', () => {
+                const toggle = () => {
                     section.classList.toggle('collapsed');
+                    title.setAttribute('aria-expanded',
+                        section.classList.contains('collapsed') ? 'false' : 'true');
+                };
+                // Mouse
+                title.addEventListener('click', toggle);
+                // Keyboard
+                title.setAttribute('tabindex', '0');
+                title.setAttribute('role', 'button');
+                title.setAttribute('aria-expanded', 'true');
+                title.addEventListener('keydown', (e: Event) => {
+                    const ke = e as KeyboardEvent;
+                    if (ke.key === 'Enter' || ke.key === ' ') {
+                        ke.preventDefault();
+                        toggle();
+                    }
                 });
             }
         });
@@ -787,15 +805,27 @@ class AetherisPlayground {
 
         container.style.display = 'flex';
 
-        container.innerHTML = entries.map(([key, val]) => {
-            const label = key.replace(/_/g, ' ');
-            return `
-                <div class="stat">
-                    <span class="label" style="text-transform: capitalize;">${label}</span>
-                    <span class="value" style="font-size: 0.65rem; font-family: var(--world-font-mono);">${val}</span>
-                </div>
-            `;
-        }).join('');
+        // Build rows via DOM API so server-supplied keys/values are never parsed as HTML.
+        container.innerHTML = '';
+        for (const [key, val] of entries) {
+            const row = document.createElement('div');
+            row.className = 'stat';
+
+            const labelEl = document.createElement('span');
+            labelEl.className = 'label';
+            labelEl.style.textTransform = 'capitalize';
+            labelEl.textContent = key.replace(/_/g, ' ');
+
+            const valueEl = document.createElement('span');
+            valueEl.className = 'value';
+            valueEl.style.fontSize = '0.65rem';
+            valueEl.style.fontFamily = 'var(--world-font-mono)';
+            valueEl.textContent = String(val);
+
+            row.appendChild(labelEl);
+            row.appendChild(valueEl);
+            container.appendChild(row);
+        }
     }
 
     private updateEntityCount() {
@@ -911,9 +941,9 @@ class AetherisPlayground {
                 // Arrow mapping: we mirror them to WASD indicators if that's the intent, 
                 // OR we just track exactly what the data-key says.
                 // The badges in HTML are: KeyW, KeyA, KeyS, KeyD, KeyQ, KeyE, Space, KeyF.
-                
+
                 let active = this.heldKeys.has(key);
-                
+
                 // Mirror Arrows to WASD badges for visual feedback
                 if (key === 'KeyW' && this.heldKeys.has('ArrowUp')) active = true;
                 if (key === 'KeyS' && this.heldKeys.has('ArrowDown')) active = true;

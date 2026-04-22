@@ -234,7 +234,7 @@ export class ShortcutRegistry {
         // Header
         const header = document.createElement('div');
         header.className = 'shortcut-modal-header';
-        
+
         const tabsContainer = document.createElement('div');
         tabsContainer.className = 'shortcut-modal-tabs';
 
@@ -253,14 +253,14 @@ export class ShortcutRegistry {
         tabsContainer.appendChild(tabShortcuts);
         tabsContainer.appendChild(tabHelp);
         tabsContainer.appendChild(tabTelemetry);
-        
+
         const closeBtn = document.createElement('button');
         closeBtn.className = 'shortcut-close-btn';
         closeBtn.id = 'shortcut-close-btn';
         closeBtn.setAttribute('aria-label', 'Close shortcuts overlay');
         closeBtn.textContent = '\u2715';
         closeBtn.addEventListener('click', () => this.hideOverlay());
-        
+
         header.appendChild(tabsContainer);
         header.appendChild(closeBtn);
 
@@ -273,73 +273,91 @@ export class ShortcutRegistry {
 
         const helpContent = document.createElement('div');
         helpContent.className = 'shortcut-tab-content';
-        helpContent.innerHTML = `
-            <div class="help-doc-section">
-                <div class="help-doc-title">
-                    <span class="mode-badge" style="color: var(--accent-success); border-color: var(--accent-success); background: color-mix(in srgb, var(--accent-success) 10%, transparent)">INFRA: LIVE</span>
-                    <span class="mode-badge" style="color: var(--accent-success); border-color: var(--accent-success); background: color-mix(in srgb, var(--accent-success) 10%, transparent)">ENGINE: SERVER CTRL</span>
-                </div>
-                <div>Playground connected to Game Server. State is authoritative.</div>
-            </div>
-            <div class="help-doc-section">
-                <div class="help-doc-title">
-                    <span class="mode-badge" style="color: var(--text-muted); border-color: var(--border-subtle); background: color-mix(in srgb, var(--text-muted) 10%, transparent)">INFRA: NONE</span>
-                    <span class="mode-badge" style="color: var(--accent-primary); border-color: var(--accent-primary); background: color-mix(in srgb, var(--accent-primary) 10%, transparent)">ENGINE: LOCAL SIM</span>
-                </div>
-                <div>Offline Sandbox Mode. Engine runs locally via WebAssembly without a server.</div>
-            </div>
-            <div class="help-doc-section">
-                <div class="help-doc-title">
-                    <span class="mode-badge" style="color: var(--accent-danger); border-color: var(--accent-danger); background: color-mix(in srgb, var(--accent-danger) 10%, transparent)">INFRA: OFFLINE</span>
-                    <span class="mode-badge" style="color: var(--accent-danger); border-color: var(--accent-danger); background: color-mix(in srgb, var(--accent-danger) 10%, transparent)">ENGINE: HALTED</span>
-                </div>
-                <div>Connection lost or rate limited. Engine stops accepting input until restored.</div>
-            </div>
-            <div class="help-doc-section">
-                <div class="help-doc-title">
-                    <span class="mode-badge" style="color: var(--accent-warning); border-color: var(--accent-warning); background: color-mix(in srgb, var(--accent-warning) 10%, transparent)">INFRA: RECONNECTING</span>
-                    <span class="mode-badge" style="color: var(--accent-warning); border-color: var(--accent-warning); background: color-mix(in srgb, var(--accent-warning) 10%, transparent)">ENGINE: BLOCKED</span>
-                </div>
-                <div>Attempting to restore session. Simulation is paused to prevent state desync.</div>
-            </div>
-        `;
+
+        // Build help sections via DOM API (no innerHTML).
+        type BadgeSpec = { text: string; color: string; border: string; bg: string };
+        const makeSection = (badges: BadgeSpec[], bodyText: string) => {
+            const section = document.createElement('div');
+            section.className = 'help-doc-section';
+            const title = document.createElement('div');
+            title.className = 'help-doc-title';
+            for (const b of badges) {
+                const badge = document.createElement('span');
+                badge.className = 'mode-badge';
+                badge.style.color = b.color;
+                badge.style.borderColor = b.border;
+                badge.style.background = b.bg;
+                badge.textContent = b.text;
+                title.appendChild(badge);
+            }
+            const body = document.createElement('div');
+            body.textContent = bodyText;
+            section.appendChild(title);
+            section.appendChild(body);
+            return section;
+        };
+        const mix = (v: string) => `color-mix(in srgb, ${v} 10%, transparent)`;
+        helpContent.appendChild(makeSection(
+            [
+                { text: 'INFRA: LIVE', color: 'var(--accent-success)', border: 'var(--accent-success)', bg: mix('var(--accent-success)') },
+                { text: 'ENGINE: SERVER CTRL', color: 'var(--accent-success)', border: 'var(--accent-success)', bg: mix('var(--accent-success)') },
+            ],
+            'Playground connected to Game Server. State is authoritative.'
+        ));
+        helpContent.appendChild(makeSection(
+            [
+                { text: 'INFRA: NONE', color: 'var(--text-muted)', border: 'var(--border-subtle)', bg: mix('var(--text-muted)') },
+                { text: 'ENGINE: LOCAL SIM', color: 'var(--accent-primary)', border: 'var(--accent-primary)', bg: mix('var(--accent-primary)') },
+            ],
+            'Offline Sandbox Mode. Engine runs locally via WebAssembly without a server.'
+        ));
+        helpContent.appendChild(makeSection(
+            [
+                { text: 'INFRA: OFFLINE', color: 'var(--accent-danger)', border: 'var(--accent-danger)', bg: mix('var(--accent-danger)') },
+                { text: 'ENGINE: HALTED', color: 'var(--accent-danger)', border: 'var(--accent-danger)', bg: mix('var(--accent-danger)') },
+            ],
+            'Connection lost or rate limited. Engine stops accepting input until restored.'
+        ));
+        helpContent.appendChild(makeSection(
+            [
+                { text: 'INFRA: RECONNECTING', color: 'var(--accent-warning)', border: 'var(--accent-warning)', bg: mix('var(--accent-warning)') },
+                { text: 'ENGINE: BLOCKED', color: 'var(--accent-warning)', border: 'var(--accent-warning)', bg: mix('var(--accent-warning)') },
+            ],
+            'Attempting to restore session. Simulation is paused to prevent state desync.'
+        ));
 
         const telemetryContent = document.createElement('div');
         telemetryContent.className = 'shortcut-tab-content';
-        telemetryContent.innerHTML = `
-            <div class="help-doc-section">
-                <div class="help-doc-title">FPS (Host)</div>
-                <div>Frames Per Second of the browser's Main Thread (UI and DOM rendering). High values mean a smooth interface.</div>
-            </div>
-            <div class="help-doc-section">
-                <div class="help-doc-title">FPS (WASM)</div>
-                <div>Frames Per Second of the distinct Render Worker running the WebAssemby engine. Represents the true engine tick rate.</div>
-            </div>
-            <div class="help-doc-section">
-                <div class="help-doc-title">Frame Time (p99)</div>
-                <div>The 99th percentile time taken by the WASM render loop to draw a single frame to the WebGL canvas.</div>
-            </div>
-            <div class="help-doc-section">
-                <div class="help-doc-title">Sim Time (p99)</div>
-                <div>The 99th percentile time taken by the game simulation (physics, collision, and authority logic) per tick.</div>
-            </div>
-            <div class="help-doc-section">
-                <div class="help-doc-title">RTT</div>
-                <div>Round Trip Time. High-precision network latency measured over the active WebTransport connection. Represented in milliseconds.</div>
-            </div>
-            <div class="help-doc-section">
-                <div class="help-doc-title">Entities</div>
-                <div>The total number of actor entities currently spawned and being simulated within the spatial grid.</div>
-            </div>
-            <div class="help-doc-section">
-                <div class="help-doc-title">Dropped</div>
-                <div>The amount of predicted frames that were dropped or reverted because they failed server reconciliation due to desync.</div>
-            </div>
-            <div class="help-doc-section">
-                <div class="help-doc-title">SAB</div>
-                <div>SharedArrayBuffer memory lock status. Indicates when WebAssembly workers are blocked waiting for atomic memory handoffs.</div>
-            </div>
-        `;
+
+        // Build telemetry sections via DOM API (no innerHTML).
+        const makeTelSection = (titleText: string, bodyText: string) => {
+            const section = document.createElement('div');
+            section.className = 'help-doc-section';
+            const title = document.createElement('div');
+            title.className = 'help-doc-title';
+            title.textContent = titleText;
+            const body = document.createElement('div');
+            body.textContent = bodyText;
+            section.appendChild(title);
+            section.appendChild(body);
+            return section;
+        };
+        telemetryContent.appendChild(makeTelSection('FPS (Host)',
+            "Frames Per Second of the browser's Main Thread (UI and DOM rendering). High values mean a smooth interface."));
+        telemetryContent.appendChild(makeTelSection('FPS (WASM)',
+            'Frames Per Second of the distinct Render Worker running the WebAssembly engine. Represents the true engine tick rate.'));
+        telemetryContent.appendChild(makeTelSection('Frame Time (p99)',
+            'The 99th percentile time taken by the WASM render loop to draw a single frame to the WebGL canvas.'));
+        telemetryContent.appendChild(makeTelSection('Sim Time (p99)',
+            'The 99th percentile time taken by the game simulation (physics, collision, and authority logic) per tick.'));
+        telemetryContent.appendChild(makeTelSection('RTT',
+            'Round Trip Time. High-precision network latency measured over the active WebTransport connection. Represented in milliseconds.'));
+        telemetryContent.appendChild(makeTelSection('Entities',
+            'The total number of actor entities currently spawned and being simulated within the spatial grid.'));
+        telemetryContent.appendChild(makeTelSection('Dropped',
+            'The amount of predicted frames that were dropped or reverted because they failed server reconciliation due to desync.'));
+        telemetryContent.appendChild(makeTelSection('SAB',
+            'SharedArrayBuffer memory lock status. Indicates when WebAssembly workers are blocked waiting for atomic memory handoffs.'));
 
         for (const cat of sortedCategories) {
             const items = grouped.get(cat)!;
@@ -377,7 +395,7 @@ export class ShortcutRegistry {
 
             shortcutsContent.appendChild(group);
         }
-        
+
         body.appendChild(shortcutsContent);
         body.appendChild(helpContent);
         body.appendChild(telemetryContent);
@@ -386,7 +404,7 @@ export class ShortcutRegistry {
         const updateTabs = (activeTab: HTMLButtonElement, activeContent: HTMLElement) => {
             [tabShortcuts, tabHelp, tabTelemetry].forEach(btn => btn.classList.remove('active'));
             [shortcutsContent, helpContent, telemetryContent].forEach(content => content.classList.remove('active'));
-            
+
             activeTab.classList.add('active');
             activeContent.classList.add('active');
         };
