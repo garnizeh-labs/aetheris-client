@@ -61,12 +61,14 @@ impl WorldState for ClientWorld {
     }
 
     fn apply_updates(&mut self, updates: &[(ClientId, ComponentUpdate)]) {
-        tracing::trace!(
-            count = updates.len(),
-            player_network_id = ?self.player_network_id,
-            total_entities = self.entities.len(),
-            "[apply_updates] Processing updates"
-        );
+        if !updates.is_empty() {
+            tracing::debug!(
+                count = updates.len(),
+                player_network_id = ?self.player_network_id,
+                total_entities = self.entities.len(),
+                "[apply_updates] Processing updates batch"
+            );
+        }
         for (_, update) in updates {
             if update.tick > self.latest_tick {
                 self.latest_tick = update.tick;

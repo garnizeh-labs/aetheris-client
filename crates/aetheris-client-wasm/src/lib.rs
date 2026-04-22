@@ -167,10 +167,8 @@ mod wasm_impl {
         last_input_target: Option<NetworkId>,
         last_input_actions: Vec<PlayerInputKind>,
 
-        // When true, all incoming entity updates are suppressed until the server
-        // sends the reliable ClearWorld ack.  This prevents stale in-flight
-        // unreliable datagrams from re-populating the entity map after a clear.
         pending_clear: bool,
+        last_clear_tick: u64,
     }
 
     #[wasm_bindgen]
@@ -269,6 +267,7 @@ mod wasm_impl {
                 last_input_target: None,
                 last_input_actions: Vec::new(),
                 pending_clear: false,
+                last_clear_tick: 0,
             })
         }
 
@@ -637,13 +636,18 @@ mod wasm_impl {
                         | NetworkEvent::ReliableMessage { data, client_id } => {
                             match encoder.decode(&data) {
                                 Ok(update) => {
-                                    tracing::debug!(
-                                        network_id = update.network_id.0,
-                                        kind = update.component_kind.0,
-                                        tick = update.tick,
-                                        "Decoded component update"
-                                    );
-                                    updates.push((client_id, update));
+                                    // M10105 — Suppress updates arriving while a clear is pending,
+                                    // UNLESS they are newer than the clear tick.
+                                    if !self.pending_clear || update.tick > self.last_clear_tick {
+                                        updates.push((client_id, update));
+                                    } else {
+                                        tracing::debug!(
+                                            network_id = update.network_id.0,
+                                            tick = update.tick,
+                                            last_clear_tick = self.last_clear_tick,
+                                            "Discarding stale update (pending_clear=true)"
+                                        );
+                                    }
                                 }
                                 Err(_) => {
                                     // Try to decode as a protocol/wire event instead
@@ -684,6 +688,14 @@ mod wasm_impl {
                                                     self.world_state.system_manifest = manifest.clone();
                                                 }
                                             },
+                                            aetheris_protocol::events::NetworkEvent::ClearWorld {
+                                                ..
+                                            } => {
+                                                tracing::info!(
+                                                    "Server ClearWorld ack received (via ReliableMessage) — gate lowered"
+                                                );
+                                                self.pending_clear = false;
+                                            }
                                             _ => {}
                                         }
                                     } else {
@@ -742,7 +754,9 @@ mod wasm_impl {
                         } => {
                             if let Some(data) = self.reassembler.ingest(client_id, fragment) {
                                 if let Ok(update) = encoder.decode(&data) {
-                                    updates.push((client_id, update));
+                                    if !self.pending_clear || update.tick > self.last_clear_tick {
+                                        updates.push((client_id, update));
+                                    }
                                 }
                             }
                         }
@@ -759,10 +773,7 @@ mod wasm_impl {
                             // and do a final flush — from this point forward, no stale
                             // entity updates can arrive.
                             tracing::info!("Server ClearWorld ack received — gate lowered");
-                            self.world_state.entities.clear();
-                            self.world_state.player_network_id = None;
                             self.pending_clear = false;
-                            updates.clear();
                         }
                         NetworkEvent::GameEvent {
                             event: game_event, ..
@@ -1190,6 +1201,7 @@ mod wasm_impl {
                     self.world_state.entities.clear();
                     self.world_state.player_network_id = None;
                     self.pending_clear = true;
+                    self.last_clear_tick = self.world_state.latest_tick;
                 }
             } else {
                 // No transport, clear immediately (no in-flight datagrams to worry about)
