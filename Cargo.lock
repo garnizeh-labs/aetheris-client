@@ -4,11 +4,11 @@ version = 4
 
 [[package]]
 name = "aetheris-client-native"
-version = "0.3.10"
+version = "0.3.11"
 
 [[package]]
 name = "aetheris-client-wasm"
-version = "0.3.10"
+version = "0.3.11"
 dependencies = [
  "aetheris-encoder-serde",
  "aetheris-protocol",
@@ -46,8 +46,7 @@ dependencies = [
 [[package]]
 name = "aetheris-encoder-serde"
 version = "0.2.12"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d2cbc96ac0eb65d12b7770aa24df81f0cb237485d4134a5266f2a6b9e151a567"
+source = "git+https://github.com/garnizeh-labs/aetheris-protocol?rev=60b2b312a7568c333ca38fb63ea2607428b3729c#60b2b312a7568c333ca38fb63ea2607428b3729c"
 dependencies = [
  "aetheris-protocol",
  "metrics",
@@ -59,8 +58,7 @@ dependencies = [
 [[package]]
 name = "aetheris-protocol"
 version = "0.2.12"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "91ca11b2b875d5210a78d764e8eb33ed265dcab2575859c161cf491f10fbf2d7"
+source = "git+https://github.com/garnizeh-labs/aetheris-protocol?rev=60b2b312a7568c333ca38fb63ea2607428b3729c#60b2b312a7568c333ca38fb63ea2607428b3729c"
 dependencies = [
  "async-trait",
  "serde",
@@ -2354,3 +2352,8 @@ name = "zmij"
 version = "1.0.21"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b8848ee67ecc8aedbaf3e4122217aff892639231befc6a1b58d29fff4c2cabaa"
+
+[[patch.unused]]
+name = "aetheris-encoder-bitpack"
+version = "0.2.12"
+source = "git+https://github.com/garnizeh-labs/aetheris-protocol?rev=60b2b312a7568c333ca38fb63ea2607428b3729c#60b2b312a7568c333ca38fb63ea2607428b3729c"
