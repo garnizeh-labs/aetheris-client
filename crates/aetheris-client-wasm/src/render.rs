@@ -24,6 +24,7 @@ use wgpu::{
     VertexStepMode,
 };
 
+#[cfg(debug_assertions)]
 const MAX_DEBUG_VERTICES: usize = 10_000;
 
 #[cfg(debug_assertions)]
@@ -108,6 +109,18 @@ impl DebugDraw {
         let p2 = Vec3::new(max.x, min.y, min.z);
         let p3 = Vec3::new(max.x, max.y, min.z);
         let p4 = Vec3::new(min.x, max.y, min.z);
+
+        self.add_line(p1, p2, color);
+        self.add_line(p2, p3, color);
+        self.add_line(p3, p4, color);
+        self.add_line(p4, p1, color);
+    }
+
+    pub fn add_rect_3d(&mut self, min_x: f32, min_y: f32, max_x: f32, max_y: f32, color: [f32; 4]) {
+        let p1 = Vec3::new(min_x, min_y, 0.0);
+        let p2 = Vec3::new(max_x, min_y, 0.0);
+        let p3 = Vec3::new(max_x, max_y, 0.0);
+        let p4 = Vec3::new(min_x, max_y, 0.0);
 
         self.add_line(p1, p2, color);
         self.add_line(p2, p3, color);
@@ -255,6 +268,7 @@ pub struct RenderState {
     laser_vertex_buffer: Buffer,
 
     clear_color: wgpu::Color,
+    room_bounds: (f32, f32, f32, f32),
 }
 
 impl RenderState {
@@ -274,7 +288,24 @@ impl RenderState {
             .await
             .map_err(|e| format!("Failed to find a suitable GPU adapter: {e}"))?;
 
-        tracing::info!("Aetheris Render: Adapter found: {:?}", adapter.get_info());
+        let info = adapter.get_info();
+        let limits = adapter.limits();
+        tracing::info!(
+            "Aetheris Render: Adapter found: {} [{:?}] (Type: {:?})",
+            if info.name.is_empty() {
+                "WebGPU"
+            } else {
+                &info.name
+            },
+            info.backend,
+            info.device_type
+        );
+        tracing::info!(
+            "  Limits: Max Texture 2D: {}, Max Bind Groups: {}, Max Uniform Buffer Size: {} KB",
+            limits.max_texture_dimension_2d,
+            limits.max_bind_groups,
+            limits.max_uniform_buffer_binding_size / 1024
+        );
 
         let (device, queue) = adapter
             .request_device(&DeviceDescriptor {
@@ -318,7 +349,14 @@ impl RenderState {
             swapchain_capabilities.alpha_modes[0]
         };
 
-        tracing::info!("Selected CompositeAlphaMode: {:?}", alpha_mode);
+        tracing::info!(
+            "Surface Capabilities: Formats: {:?}, PresentModes: {:?}, AlphaModes: {:?}",
+            swapchain_capabilities.formats,
+            swapchain_capabilities.present_modes,
+            swapchain_capabilities.alpha_modes
+        );
+        tracing::info!("Selected AlphaMode: {:?}", alpha_mode);
+        tracing::info!("Selected SurfaceFormat: {:?}", swapchain_format);
 
         let surface_config = SurfaceConfiguration {
             usage: TextureUsages::RENDER_ATTACHMENT,
@@ -733,6 +771,7 @@ impl RenderState {
                 b: 0.02,
                 a: 1.0,
             },
+            room_bounds: (0.0, 0.0, 0.0, 0.0),
         })
     }
 
@@ -769,6 +808,10 @@ impl RenderState {
 
     pub fn set_clear_color(&mut self, color: wgpu::Color) {
         self.clear_color = color;
+    }
+
+    pub fn set_room_bounds(&mut self, bounds: (f32, f32, f32, f32)) {
+        self.room_bounds = bounds;
     }
 
     #[cfg(debug_assertions)]
@@ -1078,6 +1121,19 @@ impl RenderState {
             // B. Entity Debug Info
             // B. Entity Debug Info (using DebugDrawable trait)
             if self.debug_mode != DebugRenderMode::Off {
+                // Draw Room Bounds
+                if self.room_bounds.2 > self.room_bounds.0 {
+                    let mut bounds_color = self.label_color;
+                    bounds_color[1] *= 0.5; // Slight tint
+                    self.debug_draw.add_rect_3d(
+                        self.room_bounds.0,
+                        self.room_bounds.1,
+                        self.room_bounds.2,
+                        self.room_bounds.3,
+                        bounds_color,
+                    );
+                }
+
                 for ent in entities {
                     let has_mesh = self.primitives.contains_key(&ent.entity_type);
                     ent.debug_draw(&mut self.debug_draw, self.debug_mode, has_mesh);

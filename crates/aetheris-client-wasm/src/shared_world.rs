@@ -70,11 +70,15 @@ pub struct SabHeader {
     pub state: AtomicU64, // Offset 0
     /// The latest server tick corresponding to the data in the active buffer.
     pub tick: AtomicU64, // Offset 8
+    pub room_min_x: core::sync::atomic::AtomicU32, // Offset 16
+    pub room_min_y: core::sync::atomic::AtomicU32, // Offset 20
+    pub room_max_x: core::sync::atomic::AtomicU32, // Offset 24
+    pub room_max_y: core::sync::atomic::AtomicU32, // Offset 28
 }
 
 /// Total size in bytes required for the compact replication layout.
-/// 16 bytes (Header) + 384 KiB (Buffer A) + 384 KiB (Buffer B) = 768 KiB + 16 bytes.
-/// Note: Rounded to 768 KiB in documentation, exact size is 786,448 bytes.
+/// 32 bytes (Header) + 384 KiB (Buffer A) + 384 KiB (Buffer B) = 768 KiB + 32 bytes.
+/// Note: Rounded to 768 KiB in documentation, exact size is 786,464 bytes.
 pub const SHARED_MEMORY_SIZE: usize =
     core::mem::size_of::<SabHeader>() + (core::mem::size_of::<SabSlot>() * MAX_ENTITIES * 2);
 
@@ -220,6 +224,31 @@ impl SharedWorld {
         // eliminating the TOCTOU window of the previous three-store sequence.
         let packed = (u64::from(entity_count) << 32) | u64::from(next_active);
         self.header().state.store(packed, Ordering::Release);
+    }
+
+    pub fn set_room_bounds(&mut self, min_x: f32, min_y: f32, max_x: f32, max_y: f32) {
+        self.header()
+            .room_min_x
+            .store(min_x.to_bits(), Ordering::Relaxed);
+        self.header()
+            .room_min_y
+            .store(min_y.to_bits(), Ordering::Relaxed);
+        self.header()
+            .room_max_x
+            .store(max_x.to_bits(), Ordering::Relaxed);
+        self.header()
+            .room_max_y
+            .store(max_y.to_bits(), Ordering::Relaxed);
+    }
+
+    #[must_use]
+    pub fn get_room_bounds(&self) -> (f32, f32, f32, f32) {
+        (
+            f32::from_bits(self.header().room_min_x.load(Ordering::Relaxed)),
+            f32::from_bits(self.header().room_min_y.load(Ordering::Relaxed)),
+            f32::from_bits(self.header().room_max_x.load(Ordering::Relaxed)),
+            f32::from_bits(self.header().room_max_y.load(Ordering::Relaxed)),
+        )
     }
 }
 

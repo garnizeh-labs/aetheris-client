@@ -325,3 +325,6 @@ Features planned for future playground iterations. Move items to [Section 6](#6-
 | 2026-04-18 | WASM observability (M10105) via `MetricsCollector` | Separate out-of-band JSON flush to `/telemetry/json` keeps metrics independent of the WebTransport data path; avoids head-of-line blocking. ULID-based IDs give Jaeger trace correlation without any server-side changes. |
 | 2026-04-18 | Canvas background changed to `#000` | Transparent canvas caused see-through artifacts on some GPU drivers when the wgpu surface was not fully initialized; opaque black is safe on all platforms. |
 | 2026-04-18 | `ResizeObserver` forwards physical pixels to Render Worker | CSS `clientWidth/Height` in the Main Thread is the only reliable source of canvas dimensions; the Render Worker has no access to the DOM after `transferControlToOffscreen`. |
+| 2026-04-21 | System Manifest (on-demand pull) | Replaces rigid version fields with extensible `BTreeMap`. Permissions (JTI) allow exposing debug metrics only to admins. |
+| 2026-04-21 | Possession flag (0x04) late-synchronization | Fixes race where `Possession` event arrives before entity replication. Client re-checks ID against every update. |
+| 2026-04-21 | Input log suppression (repeated commands) | Downgrades repeated inputs to `TRACE` to avoid flooding the console while holding movement keys. |

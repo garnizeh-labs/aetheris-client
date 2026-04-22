@@ -161,8 +161,16 @@ mod wasm_impl {
 
         // Reusable buffer for zero-allocation rendering (Render Worker only)
         pub(crate) render_buffer: Vec<SabSlot>,
-
         pub(crate) asset_registry: assets::AssetRegistry,
+
+        // Input noise reduction
+        last_input_target: Option<NetworkId>,
+        last_input_actions: Vec<PlayerInputKind>,
+
+        // When true, all incoming entity updates are suppressed until the server
+        // sends the reliable ClearWorld ack.  This prevents stale in-flight
+        // unreliable datagrams from re-populating the entity map after a clear.
+        pending_clear: bool,
     }
 
     #[wasm_bindgen]
@@ -203,6 +211,24 @@ mod wasm_impl {
                 SharedWorld::new()
             };
 
+            let global = js_sys::global();
+            let (ua, lang) =
+                if let Ok(worker) = global.clone().dyn_into::<web_sys::WorkerGlobalScope>() {
+                    let n = worker.navigator();
+                    (n.user_agent().ok(), n.language())
+                } else if let Ok(window) = global.dyn_into::<web_sys::Window>() {
+                    let n = window.navigator();
+                    (n.user_agent().ok(), n.language())
+                } else {
+                    (None, None)
+                };
+
+            tracing::info!(
+                "Aetheris Client: Environment [UA: {}, Lang: {}]",
+                ua.as_deref().unwrap_or("Unknown"),
+                lang.as_deref().unwrap_or("Unknown")
+            );
+
             tracing::info!(
                 "AetherisClient initialized on worker {}",
                 crate::get_worker_id()
@@ -219,9 +245,12 @@ mod wasm_impl {
                 );
             });
 
+            let mut world_state = ClientWorld::new();
+            world_state.shared_world_ref = Some(shared_world.as_ptr() as usize);
+
             Ok(Self {
                 shared_world,
-                world_state: ClientWorld::new(),
+                world_state,
                 render_state: None,
                 transport: None,
                 worker_id: crate::get_worker_id(),
@@ -237,6 +266,9 @@ mod wasm_impl {
                 first_playground_tick: true,
                 render_buffer: Vec::with_capacity(crate::shared_world::MAX_ENTITIES),
                 asset_registry: assets::AssetRegistry::new(),
+                last_input_target: None,
+                last_input_actions: Vec::new(),
+                pending_clear: false,
             })
         }
 
@@ -546,6 +578,18 @@ mod wasm_impl {
             }
         }
 
+        #[wasm_bindgen]
+        pub fn latest_tick(&self) -> u64 {
+            self.world_state.latest_tick
+        }
+
+        #[wasm_bindgen]
+        pub fn playground_apply_input(&mut self, move_x: f32, move_y: f32, actions_mask: u32) {
+            self.check_worker();
+            self.world_state
+                .playground_apply_input(move_x, move_y, actions_mask);
+        }
+
         /// Simulation tick called by the Network Worker at a fixed rate (e.g. 20Hz).
         pub async fn tick(&mut self) {
             self.check_worker();
@@ -606,28 +650,40 @@ mod wasm_impl {
                                     if let Ok(event) = encoder.decode_event(&data) {
                                         match event {
                                             aetheris_protocol::events::NetworkEvent::GameEvent {
-                                                event:
-                                                    aetheris_protocol::events::GameEvent::AsteroidDepleted {
-                                                        network_id,
-                                                    },
+                                                event: game_event,
                                                 ..
-                                            } => {
-                                                tracing::info!(?network_id, "Asteroid depleted");
-                                                // Instant local despawn to hide latency
-                                                self.world_state.entities.remove(&network_id);
+                                            } => match &game_event {
+                                                aetheris_protocol::events::GameEvent::AsteroidDepleted {
+                                                    network_id,
+                                                } => {
+                                                    tracing::info!(?network_id, "Asteroid depleted");
+                                                    self.world_state.entities.remove(&network_id);
 
-                                                // Clear local mining target if it matches the depleted asteroid
-                                                for slot in self.world_state.entities.values_mut() {
-                                                    // flags & 0x04 is local player
-                                                    if (slot.flags & 0x04) != 0
-                                                        && slot.mining_target_id == (network_id.0 as u16)
-                                                    {
-                                                        slot.mining_active = 0;
-                                                        slot.mining_target_id = 0;
-                                                        tracing::info!("Cleared local mining target due to depletion");
+                                                    for slot in self.world_state.entities.values_mut() {
+                                                        if (slot.flags & 0x04) != 0
+                                                            && slot.mining_target_id == (network_id.0 as u16)
+                                                        {
+                                                            slot.mining_active = 0;
+                                                            slot.mining_target_id = 0;
+                                                            tracing::info!("Cleared local mining target due to depletion");
+                                                        }
                                                     }
                                                 }
-                                            }
+                                                aetheris_protocol::events::GameEvent::Possession {
+                                                    network_id: _,
+                                                } => {
+                                                    self.world_state.handle_game_event(&game_event);
+                                                }
+                                                aetheris_protocol::events::GameEvent::SystemManifest {
+                                                    manifest,
+                                                } => {
+                                                    tracing::info!(
+                                                        count = manifest.len(),
+                                                        "Received SystemManifest from server"
+                                                    );
+                                                    self.world_state.system_manifest = manifest.clone();
+                                                }
+                                            },
                                             _ => {}
                                         }
                                     } else {
@@ -698,13 +754,22 @@ mod wasm_impl {
                             // Handled by GameWorker via p_spawn
                         }
                         NetworkEvent::ClearWorld { .. } => {
-                            tracing::info!("Server initiated world clear");
+                            // Reliable ack: guaranteed to arrive after all unreliable
+                            // datagrams sent before it (QUIC ordering).  Lower the gate
+                            // and do a final flush — from this point forward, no stale
+                            // entity updates can arrive.
+                            tracing::info!("Server ClearWorld ack received — gate lowered");
                             self.world_state.entities.clear();
+                            self.world_state.player_network_id = None;
+                            self.pending_clear = false;
+                            updates.clear();
                         }
-                        NetworkEvent::GameEvent { event, .. } => {
+                        NetworkEvent::GameEvent {
+                            event: game_event, ..
+                        } => {
                             // Forward to inner GameEvent logic if needed,
                             // or just handle the depletion here if it's the only one.
-                            match event {
+                            match &game_event {
                                 aetheris_protocol::events::GameEvent::AsteroidDepleted {
                                     network_id,
                                 } => {
@@ -729,9 +794,19 @@ mod wasm_impl {
                                         }
                                     }
                                 }
-                                #[allow(unreachable_patterns)]
-                                _ => {
-                                    tracing::debug!("Unhandled inner GameEvent variant");
+                                aetheris_protocol::events::GameEvent::SystemManifest {
+                                    manifest,
+                                } => {
+                                    tracing::info!(
+                                        count = manifest.len(),
+                                        "Received SystemManifest from server (via GameEvent)"
+                                    );
+                                    self.world_state.system_manifest = manifest.clone();
+                                }
+                                aetheris_protocol::events::GameEvent::Possession {
+                                    network_id: _,
+                                } => {
+                                    self.world_state.handle_game_event(&game_event);
                                 }
                             }
                         }
@@ -743,10 +818,21 @@ mod wasm_impl {
                 }
 
                 // 2. Apply updates to the Simulation World
-                if !updates.is_empty() {
-                    tracing::debug!(count = updates.len(), "Applying server updates to world");
+                // Skip while a ClearWorld ack is pending: any updates arriving
+                // now are stale datagrams from before the clear command.
+                if self.pending_clear {
+                    if !updates.is_empty() {
+                        tracing::debug!(
+                            count = updates.len(),
+                            "Discarding updates — pending_clear gate is raised"
+                        );
+                    }
+                } else {
+                    if !updates.is_empty() {
+                        tracing::debug!(count = updates.len(), "Applying server updates to world");
+                    }
+                    self.world_state.apply_updates(&updates);
                 }
-                self.world_state.apply_updates(&updates);
             }
 
             // 2.5. Client-side rotation animation (local, not replicated by server)
@@ -790,6 +876,33 @@ mod wasm_impl {
 
             tracing::debug!(entity_count = count, tick, "Flushed world to SAB");
             self.shared_world.commit_write(count as u32, tick);
+        }
+
+        #[wasm_bindgen]
+        pub async fn request_system_manifest(&mut self) -> Result<(), JsValue> {
+            self.check_worker();
+
+            if let Some(transport) = &self.transport {
+                let encoder = SerdeEncoder::new();
+                let event = NetworkEvent::RequestSystemManifest {
+                    client_id: ClientId(0),
+                };
+
+                if let Ok(data) = encoder.encode_event(&event) {
+                    transport
+                        .send_reliable(ClientId(0), &data)
+                        .await
+                        .map_err(|e| JsValue::from_str(&format!("{e:?}")))?;
+                    tracing::info!("Sent RequestSystemManifest command to server");
+                }
+            }
+            Ok(())
+        }
+
+        #[wasm_bindgen]
+        pub fn get_system_info(&self) -> Result<JsValue, JsValue> {
+            serde_wasm_bindgen::to_value(&self.world_state.system_manifest)
+                .map_err(|e| JsValue::from_str(&e.to_string()))
         }
 
         #[wasm_bindgen]
@@ -873,6 +986,29 @@ mod wasm_impl {
             self.world_state.entities.clear();
         }
 
+        /// Sends a StartSession command to the server.
+        /// The server will spawn the session Interceptor and send back a Possession event.
+        /// Only valid when connected; does nothing in local sandbox mode.
+        #[wasm_bindgen]
+        pub async fn start_session_net(&mut self) -> Result<(), JsValue> {
+            self.check_worker();
+
+            if let Some(transport) = &self.transport {
+                let encoder = SerdeEncoder::new();
+                let event = NetworkEvent::StartSession {
+                    client_id: ClientId(0),
+                };
+                if let Ok(data) = encoder.encode_event(&event) {
+                    transport
+                        .send_reliable(ClientId(0), &data)
+                        .await
+                        .map_err(|e| JsValue::from_str(&format!("{e:?}")))?;
+                    tracing::info!("Sent StartSession command to server");
+                }
+            }
+            Ok(())
+        }
+
         /// Sends a movement/action input command to the server.
         ///
         /// The input is encoded as an unreliable component update (Kind 128)
@@ -884,15 +1020,47 @@ mod wasm_impl {
             move_x: f32,
             move_y: f32,
             actions_mask: u32,
-            target_id: Option<u64>,
+            target_id_arg: Option<u64>,
         ) -> Result<(), JsValue> {
             self.check_worker();
 
-            let transport = self.transport.as_ref().ok_or_else(|| {
-                JsValue::from_str("Cannot send input: transport not initialized or closed")
-            })?;
+            // 1. Identify the controlled player entity to target the command correctly
+            let target_id = if let Some(owned_id) = self.world_state.player_network_id {
+                // If we have an explicit possession ID from the server, use it.
+                // This is the most reliable method (M1038).
+                tracing::info!(
+                    network_id = owned_id.0,
+                    "[send_input] Using player_network_id for input target"
+                );
+                Some(owned_id)
+            } else {
+                // Fallback: Identify via replication flags if possession event hasn't arrived yet
+                let fallback = self
+                    .world_state
+                    .entities
+                    .iter()
+                    .find(|(_, slot)| (slot.flags & 0x04) != 0)
+                    .map(|(id, _)| *id);
+                tracing::trace!(
+                    fallback_id = ?fallback,
+                    "[send_input] No player_network_id set - using 0x04 flag fallback"
+                );
+                fallback
+            };
 
-            // 1. Prepare actions vector
+            let Some(target_id) = target_id else {
+                tracing::trace!("[send_input] Input dropped: no controlled entity found");
+                return Ok(());
+            };
+
+            tracing::info!(
+                target_id = target_id.0,
+                move_x,
+                move_y,
+                "[send_input] Sending input for entity"
+            );
+
+            // 2. Prepare actions vector
             let mut actions = Vec::new();
 
             // Movement action
@@ -910,7 +1078,7 @@ mod wasm_impl {
             }
             // Bit 1: ToggleMining
             if (actions_mask & 0x02) != 0 {
-                if let Some(id) = target_id {
+                if let Some(id) = target_id_arg {
                     actions.push(PlayerInputKind::ToggleMining {
                         target: NetworkId(id),
                     });
@@ -919,16 +1087,63 @@ mod wasm_impl {
                 }
             }
 
-            let cmd = InputCommand { tick, actions }.clamped();
+            // 3. Noise reduction check
+            let is_repeated = self.last_input_actions.len() == actions.len()
+                && self
+                    .last_input_actions
+                    .iter()
+                    .zip(actions.iter())
+                    .all(|(a, b)| a == b)
+                && self.last_input_target == Some(target_id);
 
-            // 2. Encode as a ComponentUpdate-compatible packet
+            if move_x.abs() > f32::EPSILON || move_y.abs() > f32::EPSILON || actions_mask != 0 {
+                if is_repeated {
+                    tracing::trace!(
+                        tick,
+                        move_x,
+                        move_y,
+                        actions_mask,
+                        "Client sending input (repeated)"
+                    );
+                } else {
+                    tracing::info!(tick, move_x, move_y, actions_mask, "Client sending input");
+                }
+            }
+
+            let transport = self.transport.as_ref().ok_or_else(|| {
+                JsValue::from_str("Cannot send input: transport not initialized or closed")
+            })?;
+
+            if is_repeated {
+                tracing::trace!(
+                    ?target_id,
+                    x = move_x,
+                    y = move_y,
+                    "Sending InputCommand (repeated)"
+                );
+            } else {
+                tracing::info!(?target_id, x = move_x, y = move_y, "Sending InputCommand");
+            }
+
+            // Update last input state
+            self.last_input_target = Some(target_id);
+            self.last_input_actions = actions.clone();
+
+            let cmd = InputCommand {
+                tick,
+                actions,
+                last_seen_input_tick: None,
+            }
+            .clamped();
+
+            // 4. Encode as a ComponentUpdate-compatible packet
             // We use ComponentKind(128) as the convention for InputCommands.
             // The server's TickScheduler will decode this as a standard game update.
             let payload = rmp_serde::to_vec(&cmd)
                 .map_err(|e| JsValue::from_str(&format!("Failed to encode InputCommand: {e:?}")))?;
 
             let update = ReplicationEvent {
-                network_id: NetworkId(0), // Client sends its own ID or 0 if unknown
+                network_id: target_id,
                 component_kind: ComponentKind(128),
                 payload,
                 tick,
@@ -965,12 +1180,21 @@ mod wasm_impl {
                         .send_reliable(ClientId(0), &data)
                         .await
                         .map_err(|e| JsValue::from_str(&format!("{e:?}")))?;
-                    tracing::info!("Sent ClearWorld command to server");
+                    tracing::info!(
+                        "Sent ClearWorld command to server — suppressing updates until ack"
+                    );
+                    // Immediately clear local state and raise the gate.  All incoming
+                    // entity updates are suppressed until the server's reliable ClearWorld
+                    // ack arrives, preventing stale in-flight datagrams from re-adding
+                    // entities that were just despawned on the server.
                     self.world_state.entities.clear();
+                    self.world_state.player_network_id = None;
+                    self.pending_clear = true;
                 }
             } else {
-                // No transport, clear immediately
+                // No transport, clear immediately (no in-flight datagrams to worry about)
                 self.world_state.entities.clear();
+                self.world_state.player_network_id = None;
             }
             Ok(())
         }
@@ -1063,6 +1287,10 @@ mod wasm_impl {
 
             let tick = self.shared_world.tick();
             let entities = self.shared_world.get_read_buffer();
+            let bounds = self.shared_world.get_room_bounds();
+            if let Some(state) = &mut self.render_state {
+                state.set_room_bounds(bounds);
+            }
 
             // Periodic diagnostic log for render worker
             thread_local! {
@@ -1228,27 +1456,5 @@ mod wasm_impl {
             diff -= std::f32::consts::TAU;
         }
         a + diff * alpha
-    }
-
-    #[cfg(test)]
-    mod tests {
-        // use super::*;
-        // use crate::transport_mock::MockTransport;
-
-        // #[tokio::test]
-        // async fn test_transport_disconnection() {
-        //     let mut client = AetherisClient::new(None).unwrap();
-        //     let mock = MockTransport::new();
-        //     client.transport = Some(Box::new(mock.clone()));
-        //     client.connection_state = ConnectionState::InGame;
-        //
-        //     // Simulate disconnection
-        //     mock.set_closed(true);
-        //
-        //     // One tick to detect
-        //     client.tick().await;
-
-        //     assert_eq!(client.connection_state, ConnectionState::Disconnected);
-        // }
     }
 }

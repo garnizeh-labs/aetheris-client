@@ -62,7 +62,8 @@ impl WebTransportBridge {
 
             let hash_obj = Object::new();
             Reflect::set(&hash_obj, &"algorithm".into(), &"sha-256".into())?;
-            Reflect::set(&hash_obj, &"value".into(), &Uint8Array::from(hash))?;
+            let hash_uint8 = Uint8Array::from(hash);
+            Reflect::set(&hash_obj, &"value".into(), &hash_uint8)?;
 
             let hashes_array = Array::new();
             hashes_array.push(&hash_obj);

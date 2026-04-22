@@ -155,6 +155,17 @@
             font-size: 0.625rem;
             color: var(--text-muted);
             letter-spacing: 0.02em;
+            transition: all var(--world-transition-speed) var(--world-transition-ease);
+        }
+
+        .sidebar-subtitle.live-mode {
+            color: var(--accent-primary);
+            text-shadow: 0 0 10px var(--accent-glow, rgba(56, 189, 248, 0.3));
+            font-family: var(--world-font-mono);
+            letter-spacing: 0.08em;
+            text-transform: uppercase;
+            font-size: 0.55rem;
+            font-weight: 500;
         }
 
         .sidebar-body {
@@ -204,6 +215,32 @@
             color: var(--accent-primary);
         }
 
+        .version-badge {
+            display: inline-flex;
+            align-items: center;
+            background: rgba(234, 88, 12, 0.08);
+            border: 1px solid rgba(234, 88, 12, 0.25);
+            color: #ea580c;
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-weight: 700;
+            font-size: 0.5rem;
+            letter-spacing: 0.08em;
+            text-transform: none; /* Prevent uppercase conversion from parent footer */
+            transition: all var(--world-transition-speed) var(--world-transition-ease);
+        }
+
+        .version-badge:hover {
+            background: rgba(234, 88, 12, 0.15);
+            border-color: rgba(234, 88, 12, 0.4);
+            transform: translateY(-1px);
+        }
+
+        .version-badge #app-version {
+            margin-left: 1px;
+            opacity: 0.9;
+        }
+
         /* ════════════════════════════════════════
          * SECTION
          * ════════════════════════════════════════ */
@@ -227,7 +264,15 @@
             font-weight: 700;
             display: flex;
             align-items: center;
+            justify-content: space-between;
             gap: 6px;
+            cursor: pointer;
+            user-select: none;
+            transition: color var(--world-transition-speed) var(--world-transition-ease);
+        }
+        
+        .section-title:hover {
+            color: var(--text-primary);
         }
 
         .section-title::before {
@@ -238,6 +283,29 @@
             background: var(--accent-primary);
             opacity: 0.45;
             flex-shrink: 0;
+            margin-right: 6px;
+        }
+        
+        .section-title .chevron {
+            font-size: 0.5rem;
+            margin-left: auto;
+            transition: transform var(--world-transition-speed) var(--world-transition-ease);
+            opacity: 0.35;
+        }
+        
+        .section.collapsed .chevron {
+            transform: rotate(-90deg);
+        }
+        
+        .section.collapsed .section-body {
+            display: none;
+        }
+
+        .section-body {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+            margin-top: 4px;
         }
 
         /* ════════════════════════════════════════
@@ -510,16 +578,90 @@
          * STATUS OUTPUT
          * ════════════════════════════════════════ */
         #status {
-            font-size: 0.5625rem;
+            font-size: 0.6875rem;
+            color: var(--text-secondary);
             font-family: var(--world-font-mono);
+            transition: color var(--world-transition-speed) var(--world-transition-ease);
             padding: 7px 10px;
             background: rgba(0, 0, 0, 0.18);
             border: 1px solid var(--border-subtle);
             border-radius: var(--world-radius-md);
-            color: var(--text-muted);
             word-break: break-all;
             line-height: 1.6;
             letter-spacing: 0.04em;
+        }
+
+        #status.error {
+            color: var(--accent-danger, #ef4444);
+            font-weight: 600;
+        }
+
+        /* ════════════════════════════════════════
+         * KEY BADGES (INPUT INDICATOR)
+         * ════════════════════════════════════════ */
+        #input-indicator {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 6px;
+            padding: 4px 0;
+        }
+
+        .key-badge {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            height: 28px;
+            background: rgba(255, 255, 255, 0.03);
+            border: 1px solid var(--border-subtle);
+            border-radius: var(--world-radius-sm);
+            font-size: 0.625rem;
+            font-family: var(--world-font-mono);
+            font-weight: 700;
+            color: var(--text-muted);
+            transition: all 0.1s ease-out;
+            user-select: none;
+            box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.02);
+        }
+
+        .key-badge.active {
+            background: var(--accent-glow-strong, rgba(56, 189, 248, 0.22));
+            color: var(--accent-primary);
+            border-color: var(--accent-primary);
+            box-shadow: 
+                0 0 12px var(--accent-glow, rgba(56, 189, 248, 0.15)),
+                inset 0 1px 0 rgba(255, 255, 255, 0.05);
+            transform: scale(0.96);
+        }
+
+        #key-space {
+            grid-column: span 2;
+        }
+
+        button.minimal-btn {
+            background: transparent;
+            border: none;
+            padding: 4px;
+            color: var(--text-muted);
+            opacity: 0.5;
+            transition: all var(--world-transition-speed) var(--world-transition-ease);
+            border-radius: var(--world-radius-sm);
+            width: auto;
+            height: auto;
+            display: inline-flex;
+            cursor: pointer;
+            box-shadow: none;
+        }
+
+        button.minimal-btn:hover {
+            opacity: 1;
+            color: var(--accent-primary);
+            background: rgba(255, 255, 255, 0.05);
+            transform: scale(1.1);
+        }
+
+        button.minimal-btn svg {
+            width: 12px;
+            height: 12px;
         }
 
         /* ════════════════════════════════════════
@@ -556,13 +698,65 @@
             align-items: center;
             justify-content: space-between;
             flex-shrink: 0;
+            gap: 16px;
         }
 
-        .shortcut-modal-title {
+        .shortcut-modal-tabs {
+            display: flex;
+            gap: 16px;
+            flex: 1;
+        }
+
+        .shortcut-tab {
             font-size: 0.8125rem;
             font-weight: 600;
-            color: var(--text-primary);
+            color: var(--text-muted);
             letter-spacing: 0.01em;
+            cursor: pointer;
+            padding-bottom: 2px;
+            border-bottom: 2px solid transparent;
+            transition: color var(--world-transition-speed), border-color var(--world-transition-speed);
+            background: none;
+            border-top: none;
+            border-left: none;
+            border-right: none;
+            outline: none;
+        }
+
+        .shortcut-tab:hover {
+            color: var(--text-primary);
+        }
+
+        .shortcut-tab.active {
+            color: var(--text-primary);
+            border-bottom-color: var(--accent-primary);
+        }
+
+        .shortcut-tab-content {
+            display: none;
+            flex-direction: column;
+            gap: 14px;
+        }
+
+        .shortcut-tab-content.active {
+            display: flex;
+        }
+
+        .help-doc-section {
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+            font-size: 0.75rem;
+            color: var(--text-secondary);
+            border-left: 2px solid var(--border-normal);
+            padding-left: 12px;
+        }
+
+        .help-doc-title {
+            margin-bottom: 2px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
         }
 
         .shortcut-close-btn {
@@ -665,136 +859,184 @@
     <!-- ═══ Sidebar ═══ -->
     <aside id="sidebar" class="glass-panel" role="complementary" aria-label="Playground controls">
 
-        <div class="sidebar-header">
-            <div class="sidebar-header-row">
+        <div class="sidebar-header" style="text-align: center;">
+            <div class="sidebar-header-row" style="justify-content: center;">
                 <h1 class="sidebar-title">Playground</h1>
-                <span id="mode-badge" class="mode-badge" role="status">SANDBOX</span>
             </div>
-            <p class="sidebar-subtitle" id="playground-subtitle">Aetheris Engine — Local Sandbox</p>
+            <div style="display: flex; gap: 8px; justify-content: center; margin-top: 8px;">
+                <span id="infra-badge" class="mode-badge" role="status">INFRA: SANDBOX</span>
+                <span id="engine-badge" class="mode-badge" role="status">ENGINE: LOCAL</span>
+            </div>
         </div>
 
         <div class="sidebar-body">
 
-            <!-- Auth (Connected Mode only) -->
-            <div id="section-auth" class="section" style="display: none;">
-                <span class="section-title">Authentication</span>
-                <div style="display: flex; flex-direction: column; gap: 8px;">
-                    <input type="email" id="auth-email" placeholder="smoke-test@aetheris.dev"
-                        aria-label="Email address">
-                    <button class="primary" onclick="requestOtp()">Request Access Code</button>
-                    <div id="otp-entry"
-                        style="display: none; flex-direction: column; gap: 8px; margin-top: 6px; padding-top: 8px; border-top: 1px solid var(--border-subtle);">
-                        <input type="text" id="auth-otp" placeholder="000000" maxlength="6" inputmode="numeric"
-                            autocomplete="one-time-code" aria-label="6-digit OTP code"
-                            style="text-align: center; letter-spacing: 0.6em; font-weight: 600; font-family: var(--world-font-mono);">
-                        <button class="primary" onclick="login()">Verify &amp; Connect</button>
+            <!-- Auth section moved to bottom as 'Session' -->
+
+            <!-- 1. System Manifest -->
+            <div id="section-system" class="section">
+                <div class="section-title">
+                    <span style="display: flex; align-items: center; gap: 4px;">SYSTEM MANIFEST</span>
+                    <div style="display: flex; align-items: center; gap: 8px;">
+                        <button id="btn-refresh-manifest" class="minimal-btn" title="Refresh Manifest" onclick="refreshManifest(event)">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M23 4v6h-6"></path><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"></path></svg>
+                        </button>
+                        <span class="chevron">▼</span>
+                    </div>
+                </div>
+                <div class="section-body">
+                    <div id="status" role="status" aria-live="polite">Initializing...</div>
+                    <div id="system-info" class="stats-panel" style="margin-top: 4px; display: none;">
+                        <!-- Dynamic manifest from server -->
                     </div>
                 </div>
             </div>
 
-            <!-- Interface Aesthetics -->
-            <div id="section-aesthetics" class="section">
-                <span class="section-title">Interface Aesthetics</span>
-                <div style="display: flex; flex-direction: column; gap: 8px;">
-                    <label for="theme-selector" style="font-size: 0.75rem; color: var(--text-secondary);">Active
-                        Theme</label>
-                    <select id="theme-selector" aria-label="Select interface theme">
-                        <!-- Populated by playground.ts -->
-                    </select>
+            <!-- 2. Telemetry -->
+            <div id="section-telemetry" class="section">
+                <span class="section-title">TELEMETRY <span class="chevron">▼</span></span>
+                <div class="section-body">
+                    <div class="stats-panel" role="region" aria-label="Performance telemetry">
+                        <div class="stat">
+                            <span class="label">FPS (Host)</span>
+                            <span id="stat-fps" class="value">—</span>
+                        </div>
+                        <div class="stat">
+                            <span class="label">FPS (WASM)</span>
+                            <span id="stat-wasm-fps" class="value">—</span>
+                        </div>
+                        <div class="stat">
+                            <span class="label">Frame Time (p99)</span>
+                            <span id="stat-frame-time" class="value">—</span>
+                        </div>
+                        <div class="stat">
+                            <span class="label">Sim Time (p99)</span>
+                            <span id="stat-sim-time" class="value">—</span>
+                        </div>
+                        <div class="stat-divider"></div>
+                        <div class="stat">
+                            <span class="label">RTT</span>
+                            <span id="stat-rtt" class="value">n/a</span>
+                        </div>
+                        <div class="stat">
+                            <span class="label">Entities</span>
+                            <span id="stat-entities" class="value">0</span>
+                        </div>
+                        <div class="stat">
+                            <span class="label">Dropped</span>
+                            <span id="stat-dropped" class="value">0</span>
+                        </div>
+                        <div class="stat-divider"></div>
+                        <div class="stat">
+                            <span class="label">SAB</span>
+                            <span id="stat-session-buffer" style="display:none"></span>
+                            <span id="stat-sab" class="value">IDLE</span>
+                        </div>
+                    </div>
                 </div>
             </div>
 
-            <!-- Entity Spawner -->
+            <!-- 3. Keyboard Input (Closed) -->
+            <div id="section-input" class="section collapsed">
+                <span class="section-title">KEYBOARD INPUT <span class="chevron">▼</span></span>
+                <div class="section-body" style="padding: 4px 0;">
+                    <div id="input-indicator">
+                        <span class="key-badge" id="key-w" data-key="KeyW">W</span>
+                        <span class="key-badge" id="key-a" data-key="KeyA">A</span>
+                        <span class="key-badge" id="key-s" data-key="KeyS">S</span>
+                        <span class="key-badge" id="key-d" data-key="KeyD">D</span>
+                        <span class="key-badge" id="key-q" data-key="KeyQ">Q</span>
+                        <span class="key-badge" id="key-e" data-key="KeyE">E</span>
+                        <span class="key-badge" id="key-space" data-key="Space">SPC</span>
+                        <span class="key-badge" id="key-f" data-key="KeyF">F</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 4. Entity Spawner -->
             <div id="section-entities" class="section">
-                <span class="section-title">Entity Spawner</span>
-                <div class="button-grid">
-                    <button onclick="spawn(1)">Interceptor</button>
-                    <button onclick="spawn(3)">Dreadnought</button>
-                    <button onclick="spawn(4)">Hauler</button>
-                    <button onclick="spawn(5)">Asteroid</button>
-                    <button onclick="spawn(6)">Projectile</button>
+                <span class="section-title">ENTITY SPAWNER <span class="chevron">▼</span></span>
+                <div class="section-body">
+                    <div class="button-grid">
+                        <button onclick="spawn(1)">Interceptor</button>
+                        <button onclick="spawn(3)">Dreadnought</button>
+                        <button onclick="spawn(4)">Hauler</button>
+                        <button onclick="spawn(5)">Asteroid</button>
+                    </div>
                 </div>
             </div>
 
-            <!-- Simulation -->
+            <!-- 5. Simulation Controls -->
             <div id="section-simulation" class="section">
-                <span class="section-title">Simulation</span>
-                <div class="radio-container">
-                    <span class="radio-label">Element Rotation</span>
-                    <div class="radio-group" id="rotation-group" role="radiogroup" aria-label="Element rotation">
-                        <label>
-                            <input type="radio" name="rotation" value="true" onchange="toggleRotation(true)">
-                            ON
-                        </label>
-                        <label>
-                            <input type="radio" name="rotation" value="false" checked onchange="toggleRotation(false)">
-                            OFF
-                        </label>
+                <span class="section-title">SIMULATION CONTROLS <span class="chevron">▼</span></span>
+                <div class="section-body">
+                    <div class="radio-container">
+                        <span class="radio-label">Element Rotation</span>
+                        <div class="radio-group" id="rotation-group" role="radiogroup" aria-label="Element rotation">
+                            <label><input type="radio" name="rotation" value="true" onchange="toggleRotation(true)"> ON</label>
+                            <label><input type="radio" name="rotation" value="false" checked onchange="toggleRotation(false)"> OFF</label>
+                        </div>
                     </div>
-                </div>
-                <button class="primary" onclick="stressTest(200)">Stress Test — 200 Units</button>
-                <button class="danger" onclick="clearWorld()">Clear World</button>
-            </div>
-
-            <!-- Telemetry -->
-            <div class="section">
-                <span class="section-title">Telemetry</span>
-                <div class="stats-panel" role="region" aria-label="Performance telemetry">
-                    <div class="stat">
-                        <span class="label">FPS (Host)</span>
-                        <span id="stat-fps" class="value">—</span>
-                    </div>
-                    <div class="stat">
-                        <span class="label">FPS (WASM)</span>
-                        <span id="stat-wasm-fps" class="value">—</span>
-                    </div>
-                    <div class="stat">
-                        <span class="label">Frame Time (p99)</span>
-                        <span id="stat-frame-time" class="value">—</span>
-                    </div>
-                    <div class="stat">
-                        <span class="label">Sim Time (p99)</span>
-                        <span id="stat-sim-time" class="value">—</span>
-                    </div>
-                    <div class="stat-divider"></div>
-                    <div class="stat">
-                        <span class="label">RTT</span>
-                        <span id="stat-rtt" class="value">n/a</span>
-                    </div>
-                    <div class="stat">
-                        <span class="label">Entities</span>
-                        <span id="stat-entities" class="value">0</span>
-                    </div>
-                    <div class="stat">
-                        <span class="label">Dropped</span>
-                        <span id="stat-dropped" class="value">0</span>
-                    </div>
-                    <div class="stat-divider"></div>
-                    <div class="stat">
-                        <span class="label">Session</span>
-                        <span id="stat-session" class="value">LOGGED OUT</span>
-                    </div>
-                    <div class="stat">
-                        <span class="label">SAB</span>
-                        <span id="stat-session-buffer" style="display:none"></span>
-                        <span id="stat-sab" class="value">IDLE</span>
+                    
+                    <div style="display: flex; flex-direction: column; gap: 8px; margin-top: 4px;">
+                        <button class="primary" id="btn-start" onclick="toggleSession()" style="display: none;">START SESSION (SPAWN SHIP)</button>
+                        <div class="button-grid">
+                            <button onclick="stressTest(200)">STRESS 200</button>
+                            <button class="danger" onclick="clearWorld()">CLEAR WORLD</button>
+                        </div>
                     </div>
                 </div>
             </div>
 
-            <!-- System -->
-            <div class="section">
-                <span class="section-title">System</span>
-                <div id="status" role="status" aria-live="polite">Initializing...</div>
-                <button id="btn-logout" class="danger" style="display: none;" onclick="logout()">
-                    Logout Session
-                </button>
+            <!-- 6. Aesthetics (Closed) -->
+            <div id="section-aesthetics" class="section collapsed" style="margin-top: auto; border-top: 1px solid var(--border-subtle);">
+                <span class="section-title">INTERFACE AESTHETICS <span class="chevron">▼</span></span>
+                <div class="section-body">
+                    <div style="display: flex; flex-direction: column; gap: 8px;">
+                        <label for="theme-selector" style="font-size: 0.75rem; color: var(--text-secondary);">Active Theme</label>
+                        <select id="theme-selector" aria-label="Select interface theme">
+                            <!-- Populated by playground.ts -->
+                        </select>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 7. Access Control (Last) -->
+            <div id="section-auth" class="section">
+                <span class="section-title">ACCESS CONTROL <span class="chevron">▼</span></span>
+                <div class="section-body">
+                    <div id="stat-session-row" class="stat" style="margin-bottom: 8px;">
+                        <span class="label">Session Status</span>
+                        <span id="stat-session" class="value" style="color: var(--accent-danger);">LOGGED OUT</span>
+                    </div>
+                    <div id="stat-client-id-row" class="stat" style="margin-bottom: 8px; display: none;">
+                        <span class="label">Client ID</span>
+                        <span id="stat-client-id" class="value" style="color: var(--accent-primary);">—</span>
+                    </div>
+                    <div id="auth-inputs" style="display: flex; flex-direction: column; gap: 8px;">
+                        <input type="email" id="auth-email" placeholder="smoke-test@aetheris.dev"
+                            aria-label="Email address">
+                        <button class="primary" onclick="requestOtp()">Request Access Code</button>
+                        <div id="otp-entry"
+                            style="display: none; flex-direction: column; gap: 8px; margin-top: 6px; padding-top: 8px; border-top: 1px solid var(--border-subtle);">
+                            <input type="text" id="auth-otp" placeholder="000000" maxlength="6" inputmode="numeric"
+                                autocomplete="one-time-code" aria-label="6-digit OTP code"
+                                style="text-align: center; letter-spacing: 0.6em; font-weight: 600; font-family: var(--world-font-mono);">
+                            <button class="primary" onclick="login()">Verify &amp; Connect</button>
+                        </div>
+                    </div>
+                    <button id="btn-logout" class="danger" style="display: none; width: 100%;" onclick="logout()">
+                        Logout Session
+                    </button>
+                </div>
             </div>
 
         </div><!-- /.sidebar-body -->
 
         <div class="sidebar-footer">
-            <span>Aetheris Engine v0.1.0</span>
+            <div class="version-badge">
+                Aetheris Playground v<span id="app-version">...</span>
+            </div>
             <a href="#" id="shortcuts-help-btn" title="Keyboard shortcuts (? or F1)">Shortcuts (?)</a>
         </div>
     </aside>
@@ -808,13 +1050,24 @@
     <script>
         /* Global helpers for inline event handlers.
          * Delegate to the AetherisPlayground instance once initialized. */
-        function spawn(type) { window.playground?.spawn(type); }
+        function spawn(type) { window.playground?.spawn(type, event); }
+        function toggleSession() { 
+            if (window.playground?.isSessionActive) {
+                window.playground?.clear(event);
+            } else {
+                window.playground?.start(event);
+            }
+        }
         function toggleRotation(on) { window.playground?.toggleRotation(on); }
-        function stressTest(count) { window.playground?.stressTest(count); }
-        function clearWorld() { window.playground?.clear(); }
+        function stressTest(count) { window.playground?.stressTest(count, event); }
+        function clearWorld() { window.playground?.clear(event); }
         function requestOtp() { window.playground?.requestOtp(document.getElementById('auth-email').value); }
         function login() { window.playground?.login(document.getElementById('auth-otp').value); }
         function logout() { window.playground?.logout(); }
+        function refreshManifest(e) { 
+            e.stopPropagation(); 
+            window.playground?.refreshManifest(); 
+        }
     </script>
 </body>
 

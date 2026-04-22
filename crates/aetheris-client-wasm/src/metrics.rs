@@ -379,7 +379,7 @@ impl MetricsCollector {
         let events = self.ring.drain();
         let _ = std::mem::replace(&mut self.ring.dropped, 0);
 
-        if events.is_empty() {
+        if events.is_empty() || self.telemetry_url.is_empty() {
             return;
         }
 

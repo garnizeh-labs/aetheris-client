@@ -139,7 +139,7 @@ vite-connected: client-install
 [group('run')]
 playground-connected: stop wasm-dev
     @mkdir -p logs
-    cd playground && VITE_PLAYGROUND_CONNECTED=true VITE_SERVER_CERT_HASH=$(cat ../../aetheris-engine/target/dev-certs/cert.sha256 2>/dev/null || echo "missing") npm run dev >> ../logs/vite.log 2>&1 &
+    cd playground && VITE_PLAYGROUND_CONNECTED=true VITE_TELEMETRY_URL=http://127.0.0.1:50055 VITE_SERVER_CERT_HASH=$(cat ../../aetheris-engine/target/dev-certs/cert.sha256 2>/dev/null || echo "missing") npm run dev >> ../logs/vite.log 2>&1 &
     @echo "Playground connected session ready at http://localhost:5173/playground.html"
 
 # Helper to wait for server certificate

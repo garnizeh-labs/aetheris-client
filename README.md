@@ -15,13 +15,13 @@
 **Aetheris Client** brings authoritative multiplayer to the browser without compromising on frame times. By leveraging a native three-worker architecture, the client isolates networking (IO), simulation (Logic), and rendering (Visuals) into parallel streams. This ensures that even during heavy network spikes or complex simulation updates, the rendering thread maintains a butter-smooth 60Hz experience using modern WebGPU pipelines.
 
 > [!IMPORTANT]
-> 🚀 **Current State:** **VS-01 (One Ship, One Sector) complete!** Protocol v0.2.8 & Authoritative Input Pipeline.
+> 🚀 **Current State:** **VS-05 (Playground Input) complete!** Protocol v0.2.11 & Authoritative Input Pipeline.
 >
 > Features introduced in this phase:
 >
-> - **Protocol v0.2.8:** Validated synchronization primitives for Newtonian flight (60Hz).
-> - **Bitmask Input Pipeline:** Efficiency-optimized InputCommand mapping (MoveDirection + Actions bitmask).
-> - **Quality Gate Passing:** just check and just test-wasm green for VS-01 scope.
+> - **Protocol v0.2.11:** System Manifest (extensible metadata) and Possession flow.
+> - **Input Pipeline:** Key-state forwarding (WASD+F+Space) with noise reduction.
+> - **Quality Gate Passing:** `just check` and `just wasm` green for VS-05 scope.
 >
 ### 📦 Workspace Components
 
