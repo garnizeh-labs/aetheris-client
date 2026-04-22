@@ -78,7 +78,8 @@ pub struct SabHeader {
     /// Writer bumps to odd before writing the four bounds fields, then to even (Release)
     /// after. Readers spin until they observe two equal even values around their reads.
     pub room_bounds_seq: core::sync::atomic::AtomicU32, // Offset 32
-    pub _pad: core::sync::atomic::AtomicU32,       // Offset 36 — alignment padding
+    /// Alignment padding to 40 bytes.
+    pub pad: core::sync::atomic::AtomicU32, // Offset 36
 }
 
 /// Total size in bytes required for the compact replication layout.
