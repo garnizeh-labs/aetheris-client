@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.13](https://github.com/garnizeh-labs/aetheris-client/compare/aetheris-client-wasm-v0.3.12...aetheris-client-wasm-v0.3.13) - 2026-04-22
+
+### Fixed
+
+- *(client)* address clippy lints in shared_world and world_state
+
+### Other
+
+- Merge pull request #30 from garnizeh-labs/fix/update-cargo-lock-vs-05-06
+
 ## [0.3.12](https://github.com/garnizeh-labs/aetheris-client/compare/aetheris-client-wasm-v0.3.10...aetheris-client-wasm-v0.3.12) - 2026-04-22
 
 ### Added
