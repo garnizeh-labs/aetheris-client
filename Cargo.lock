@@ -4,11 +4,11 @@ version = 4
 
 [[package]]
 name = "aetheris-client-native"
-version = "0.3.13"
+version = "0.3.14"
 
 [[package]]
 name = "aetheris-client-wasm"
-version = "0.3.13"
+version = "0.3.14"
 dependencies = [
  "aetheris-encoder-serde",
  "aetheris-protocol",
