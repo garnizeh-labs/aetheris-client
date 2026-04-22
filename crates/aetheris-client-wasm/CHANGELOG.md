@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.11](https://github.com/garnizeh-labs/aetheris-client/compare/aetheris-client-wasm-v0.3.10...aetheris-client-wasm-v0.3.11) - 2026-04-22
+
+### Added
+
+- *(client)* enhance room bounds handling with seqlock for consistent reads and updates
+- *(client)* update input pipeline and world state for VS-05/VS-06
+
+### Fixed
+
+- *(client)* M10105 — tick-gated pending_clear suppression
+
 ## [0.3.10](https://github.com/garnizeh-labs/aetheris-client/compare/aetheris-client-wasm-v0.3.8...aetheris-client-wasm-v0.3.10) - 2026-04-21
 
 ### Added
