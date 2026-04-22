@@ -358,6 +358,11 @@ impl MetricsCollector {
 
     /// Internal flush implementation with keepalive support.
     fn flush_internal(&mut self, keepalive: bool) {
+        // Skip immediately if telemetry is disabled — don't even build the summary.
+        if self.telemetry_url.is_empty() {
+            return;
+        }
+
         // Build summary event from accumulated metrics
         let frame_p99 = self.frame_sampler.p99();
         let sim_p99 = self.sim_sampler.p99();
@@ -378,10 +383,6 @@ impl MetricsCollector {
         // Drain ring and reset dropped counter so each flush sends the delta
         let events = self.ring.drain();
         let _ = std::mem::replace(&mut self.ring.dropped, 0);
-
-        if events.is_empty() || self.telemetry_url.is_empty() {
-            return;
-        }
 
         let batch = TelemetryBatchJson {
             events,

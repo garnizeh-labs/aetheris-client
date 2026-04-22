@@ -636,16 +636,19 @@ mod wasm_impl {
                         | NetworkEvent::ReliableMessage { data, client_id } => {
                             match encoder.decode(&data) {
                                 Ok(update) => {
-                                    // M10105 — Suppress updates arriving while a clear is pending,
-                                    // UNLESS they are newer than the clear tick.
-                                    if !self.pending_clear || update.tick > self.last_clear_tick {
+                                    // M10105 — Always filter by epoch tick so stale datagrams are
+                                    // rejected even after the reliable ClearWorld ack has lowered
+                                    // pending_clear (unreliable datagrams may overtake the ack).
+                                    if self.last_clear_tick == 0
+                                        || update.tick > self.last_clear_tick
+                                    {
                                         updates.push((client_id, update));
                                     } else {
                                         tracing::debug!(
                                             network_id = update.network_id.0,
                                             tick = update.tick,
                                             last_clear_tick = self.last_clear_tick,
-                                            "Discarding stale update (pending_clear=true)"
+                                            "Discarding stale update (tick <= last_clear_tick)"
                                         );
                                     }
                                 }
@@ -754,7 +757,9 @@ mod wasm_impl {
                         } => {
                             if let Some(data) = self.reassembler.ingest(client_id, fragment) {
                                 if let Ok(update) = encoder.decode(&data) {
-                                    if !self.pending_clear || update.tick > self.last_clear_tick {
+                                    if self.last_clear_tick == 0
+                                        || update.tick > self.last_clear_tick
+                                    {
                                         updates.push((client_id, update));
                                     }
                                 }
