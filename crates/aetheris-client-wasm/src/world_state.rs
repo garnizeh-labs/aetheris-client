@@ -179,17 +179,16 @@ impl ClientWorld {
                 "[handle_game_event] POSSESSION received"
             );
             // Clear the local-player flag from the previous entity if it differs.
-            if let Some(prev_id) = prev {
-                if prev_id != *network_id {
-                    if let Some(slot) = self.entities.get_mut(&prev_id) {
-                        slot.flags &= !0x04;
-                        tracing::info!(
-                            ?prev_id,
-                            flags = slot.flags,
-                            "[handle_game_event] 0x04 flag cleared from previous entity"
-                        );
-                    }
-                }
+            if let Some(slot) = prev
+                .filter(|&id| id != *network_id)
+                .and_then(|id| self.entities.get_mut(&id))
+            {
+                slot.flags &= !0x04;
+                tracing::info!(
+                    network_id = ?prev,
+                    flags = slot.flags,
+                    "[handle_game_event] 0x04 flag cleared from previous entity"
+                );
             }
             self.player_network_id = Some(*network_id);
             if let Some(slot) = self.entities.get_mut(network_id) {
