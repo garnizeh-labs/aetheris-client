@@ -36,6 +36,7 @@ dependencies = [
  "tonic-web-wasm-client",
  "tracing",
  "tracing-wasm",
+ "twox-hash",
  "ulid",
  "wasm-bindgen",
  "wasm-bindgen-futures",
