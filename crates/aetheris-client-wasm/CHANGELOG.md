@@ -7,6 +7,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.17](https://github.com/garnizeh-labs/aetheris-client/compare/aetheris-client-wasm-v0.3.16...aetheris-client-wasm-v0.3.17) - 2026-04-23
+
+### Added
+
+- *(client)* implement mandatory state_hash for WorldState compliance
+
+### Fixed
+
+- *(metrics)* use getrandom_v02 for ULID generation
+- *(ci)* restrict getrandom_backend cfg to WASM target
+- *(client)* elevate getrandom to regular dependencies to force feature unification
+- *(client)* stabilize state hashing and restore WASM thread flags
+- *(client)* force getrandom v0.3 unification with wasm_js feature
+- update getrandom_v03 dependency to version 0.3.4 with wasm_js feature enabled
+- *(client)* enable wasm_js feature for getrandom v0.3
+
 ## [0.3.16](https://github.com/garnizeh-labs/aetheris-client/compare/aetheris-client-wasm-v0.3.14...aetheris-client-wasm-v0.3.16) - 2026-04-23
 
 ### Added
