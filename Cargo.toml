@@ -62,10 +62,8 @@ web-sys = "0.3.95"
 js-sys = "0.3.95"
 console_error_panic_hook = "0.1.7"
 wasm-bindgen-test = "0.3.50"
-getrandom = { version = "0.2.17", features = ["js"] }
-getrandom_v03 = { package = "getrandom", version = "0.3.4", features = [
-    "wasm_js",
-] }
+getrandom_v02 = { package = "getrandom", version = "0.2.17", features = ["js"] }
+getrandom = { version = "0.3.4", features = ["wasm_js"] }
 getrandom_v04 = { package = "getrandom", version = "0.4.2", features = [
     "wasm_js",
 ] }
