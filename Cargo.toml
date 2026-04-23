@@ -20,9 +20,9 @@ aetheris-client-wasm = { path = "crates/aetheris-client-wasm", version = "0.3.16
 aetheris-client-native = { path = "crates/aetheris-client-native", version = "0.3.16" }
 
 # Protocol (published — garnizeh-labs/aetheris-protocol)
-aetheris-protocol = { version = "0.2.17" }
-aetheris-encoder-serde = { version = "0.2.17" }
-aetheris-encoder-bitpack = { version = "0.2.17" }
+aetheris-protocol = { version = "0.2.18" }
+aetheris-encoder-serde = { version = "0.2.18" }
+aetheris-encoder-bitpack = { version = "0.2.18" }
 
 # Core Traits & Utilities
 thiserror = "2.0.18"
@@ -62,7 +62,8 @@ web-sys = "0.3.95"
 js-sys = "0.3.95"
 console_error_panic_hook = "0.1.7"
 wasm-bindgen-test = "0.3.50"
-getrandom = { version = "0.2.17", features = ["js"] }
+getrandom_v02 = { package = "getrandom", version = "0.2.17", features = ["js"] }
+getrandom = { version = "0.3.4", features = ["wasm_js"] }
 getrandom_v04 = { package = "getrandom", version = "0.4.2", features = [
     "wasm_js",
 ] }
@@ -74,8 +75,8 @@ strip = "symbols" # Remove symbols
 panic = "abort"   # Save ~50KB per WASM bin
 codegen-units = 1 # Better LTO
 
-# [patch.crates-io]
-# # Local path overrides — remove when aetheris-protocol is published to crates.io
+[patch.crates-io]
+# Local path overrides — remove when aetheris-protocol is published to crates.io
 # aetheris-protocol = { path = "../aetheris-protocol/crates/aetheris-protocol" }
 # aetheris-encoder-serde = { path = "../aetheris-protocol/crates/aetheris-encoder-serde" }
 # aetheris-encoder-bitpack = { path = "../aetheris-protocol/crates/aetheris-encoder-bitpack" }

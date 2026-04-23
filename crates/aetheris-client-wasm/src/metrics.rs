@@ -65,7 +65,7 @@ pub fn generate_ulid_ids() -> (String, String) {
 
     // 10 random bytes = 80 random bits (ULID random component)
     let mut random_bytes = [0u8; 10];
-    getrandom::getrandom(&mut random_bytes)
+    getrandom_v02::getrandom(&mut random_bytes)
         .expect("getrandom is always available in WASM with the 'js' feature");
 
     // Pack bytes into u128 (left-aligned; lower bits zeroed — matches ULID spec)

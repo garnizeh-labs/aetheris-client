@@ -96,7 +96,7 @@ jobs:
         run: sudo apt-get update -y && sudo apt-get install -y protobuf-compiler
       - name: Build WASM
         run: |
-          RUSTFLAGS="-C target-feature=+atomics,+bulk-memory,+mutable-globals -C link-arg=--shared-memory -C link-arg=--import-memory --cfg=web_sys_unstable_apis" \
+          RUSTFLAGS="-C target-feature=+atomics,+bulk-memory,+mutable-globals -C link-arg=--shared-memory -C link-arg=--import-memory --cfg=web_sys_unstable_apis --cfg getrandom_backend=\"wasm_js\"" \
           cargo +nightly-2025-07-01 build \
             -p aetheris-client-wasm \
             --target wasm32-unknown-unknown \

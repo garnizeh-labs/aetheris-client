@@ -164,6 +164,42 @@ impl WorldState for ClientWorld {
     fn clear_world(&mut self) {
         self.entities.clear();
     }
+
+    fn state_hash(&self) -> u64 {
+        use std::hash::{Hash, Hasher};
+        use twox_hash::XxHash64;
+
+        // Use a stable, seeded hasher for cross-platform determinism
+        let mut hasher = XxHash64::with_seed(0);
+        self.latest_tick.hash(&mut hasher);
+
+        // BTreeMap iteration is already deterministic (sorted by NetworkId)
+        for (nid, slot) in &self.entities {
+            nid.hash(&mut hasher);
+
+            // SabSlot fields must be hashed individually as the struct is FFI-oriented
+            slot.x.to_bits().hash(&mut hasher);
+            slot.y.to_bits().hash(&mut hasher);
+            slot.z.to_bits().hash(&mut hasher);
+            slot.rotation.to_bits().hash(&mut hasher);
+
+            // Inclusion of physics and mining state for high-fidelity determinism (VS-07 §4.2)
+            slot.dx.to_bits().hash(&mut hasher);
+            slot.dy.to_bits().hash(&mut hasher);
+            slot.dz.to_bits().hash(&mut hasher);
+
+            slot.hp.hash(&mut hasher);
+            slot.shield.hash(&mut hasher);
+            slot.entity_type.hash(&mut hasher);
+            slot.flags.hash(&mut hasher);
+
+            slot.mining_active.hash(&mut hasher);
+            slot.cargo_ore.hash(&mut hasher);
+            slot.mining_target_id.hash(&mut hasher);
+        }
+
+        hasher.finish()
+    }
 }
 
 impl ClientWorld {
