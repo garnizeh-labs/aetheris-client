@@ -35,13 +35,13 @@ dashmap = { workspace = true }
 glam = { workspace = true }
 ruzstd = "0.8.2"
 twox-hash = "2.1.2"
+getrandom = { workspace = true }
+getrandom_v04 = { workspace = true }
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]
 ulid = { workspace = true }
 wgpu = { workspace = true, features = ["webgpu"] }
 getrandom_v02 = { workspace = true }
-getrandom = { workspace = true }
-getrandom_v04 = { workspace = true }
 tracing-wasm = { workspace = true }
 console_error_panic_hook = { workspace = true }
 metrics = { workspace = true, optional = true }
