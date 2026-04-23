@@ -751,6 +751,21 @@ mod wasm_impl {
                         NetworkEvent::StreamReset(id) => {
                             tracing::error!(?id, "WebTransport stream reset");
                         }
+                        NetworkEvent::ReplicationBatch { events, client_id } => {
+                            for event in events {
+                                if self.last_clear_tick == 0 || event.tick > self.last_clear_tick {
+                                    updates.push((
+                                        client_id,
+                                        aetheris_protocol::events::ComponentUpdate {
+                                            network_id: event.network_id,
+                                            component_kind: event.component_kind,
+                                            payload: event.payload,
+                                            tick: event.tick,
+                                        },
+                                    ));
+                                }
+                            }
+                        }
                         NetworkEvent::Fragment {
                             client_id,
                             fragment,

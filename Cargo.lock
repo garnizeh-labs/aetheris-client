@@ -45,9 +45,9 @@ dependencies = [
 
 [[package]]
 name = "aetheris-encoder-serde"
-version = "0.2.12"
+version = "0.2.17"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d2cbc96ac0eb65d12b7770aa24df81f0cb237485d4134a5266f2a6b9e151a567"
+checksum = "5fd5375f77696e0b0949d0f861e2314635f2bef995ffa06e1ce70d96ceda9c54"
 dependencies = [
  "aetheris-protocol",
  "metrics",
@@ -58,9 +58,9 @@ dependencies = [
 
 [[package]]
 name = "aetheris-protocol"
-version = "0.2.12"
+version = "0.2.17"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "91ca11b2b875d5210a78d764e8eb33ed265dcab2575859c161cf491f10fbf2d7"
+checksum = "d75e81067d3c366ce32672101f7fe1e4ad6a514ba99129a12fe5b87143527287"
 dependencies = [
  "async-trait",
  "serde",
