@@ -1,74 +1,60 @@
-# Aetheris Playground — User Manual
+# Aetheris Playground — Infrastructure Manual
 
-Broadcasting from the **Sandbox Mode**. This playground is a hermetically sealed sandbox for the Aetheris Engine's WASM client. It allows you to stress test the rendering pipeline, iterate on shaders, and validate procedural meshes without any server dependencies.
+Broadcasting from the **Authoritative Mode**. The playground has been refactored to align with **VS-01 (One Ship, One Sector)** requirements. It serves as a dedicated validation tool for the server-authoritative pipeline, ensuring that authentication, possession, and flight physics are working correctly within the distributed environment.
 
 ---
 
 ## 🚀 Quick Start
 
-The playground can be launched in different modes. **Pay attention to the URLs** as they behave differently.
+The playground now mandates a connection to an active `aetheris-server`.
 
-| Command | Mode | Target URL | Intent |
-| :--- | :--- | :--- | :--- |
-| `just playground` | **Sandbox** | `/playground.html` | pure WASM simulation. No server. |
-| `just playground-connected` | **Live** | `/playground.html` | Client + Server. Real Auth + Metrics. |
-| `just playground-tls` | **Secure Live** | `/playground.html` | Full TLS/gRPC validation. |
-| (Any of above) | **N/A** | `/` (index.html) | **Live App**: Always expects a full server. |
+| Command | Intent |
+| :--- | :--- |
+| `just playground` | Primary entry point. Connects to local server with real Auth + Metrics. |
+| `just playground-tls` | Full TLS/gRPC validation for production-like handshake testing. |
 
-### 1. Sandbox Mode (Sandbox Mode)
-Fastest for local iteration. No certificate or server required. Simulation runs entirely in WASM via `tick_playground`.
+### 1. Launching
 ```bash
 just playground
 ```
 👉 [http://localhost:5173/playground.html](http://localhost:5173/playground.html)
 
-### 2. Live Mode (Live)
-Connects to a local `aetheris-server`. Requires manual OTP entry from the server logs.
-```bash
-just playground-connected
-```
-👉 [http://localhost:5173/playground.html](http://localhost:5173/playground.html)
-
-### 3. Secure Live Mode (TLS/HTTPS)
-Used to validate the Full-TLS handshake and gRPC-Web production connectivity.
-```bash
-just playground-tls
-```
-> [!IMPORTANT]
-> Since this uses self-signed certificates, you might need to navigate to `https://127.0.0.1:50051` once in your browser and "Accept the Risk" if you encounter connectivity issues.
+### 2. Authentication
+1. Launch the server (usually in a separate terminal).
+2. Enter your email in the **Access Control** panel.
+3. Retrieve the 6-digit code from the server logs.
+4. Verify & Connect.
 
 ---
 
 ## 🛠 Features & Controls
 
-### 1. Entity Spawner
-The sidebar allows you to spawn any primitive ship class or game object at the origin `(0,0)`.
-- **Interceptor**: High-agility scout.
-- **Dreadnought**: Heavy combatant.
-- **Hauler**: Large cargo vessel.
-- **Asteroid**: Procedural mineral deposit.
-- **Projectile**: Fast, short-lived munition.
+### 1. Session Control
+Once authenticated, you can start a session:
+- **Start Session**: Requests a ship from the server. Upon successful possession, your ship will be spawned in the sector.
+- **Stop Session**: Clears the world and disconnects your authoritative entity.
 
-### 2. Stress Test (The "200 Units" Challenge)
-Click the **Stress Test** button to instantly populate the viewport with 200 randomized entities. 
-- **Target**: Maintain ≥ 60 FPS on modern hardware.
-- **Verification**: Check the **Telemetry** panel in the sidebar for real-time FPS and entity count.
+### 2. Telemetry Panel
+Provides high-fidelity diagnostics from the WASM client:
+- **FPS (Host/WASM)**: Real-time rendering and simulation performance.
+- **RTT**: Round-trip time to the server via WebTransport.
+- **Entities**: Count of active entities synchronized from the server.
 
-### 3. Simulation Toggle
-- **Auto-Rotation**: Enabling this drives a local simulation loop in the WASM Game Worker. This is used to verify that matrix transformations and interpolation snapshots are being applied correctly every frame.
-
-### 4. Telemetry Panel
-- **FPS**: Frames per second. Stabilized over a 1-second window.
-- **Entities**: Current count of active render objects.
-- **SAB State**: Displays the memory address of the `SharedArrayBuffer` being used for synchronization.
+### 3. Keyboard Input
+Visual feedback for active input commands being sent to the server.
+- **WASD/Arrows**: Movement controls.
+- **Space**: Secondary actions.
 
 ---
 
 ## 📐 Architectural Context
 
-- **Theme**: The **Blueprint** aesthetic (blue/grid) is intentional. It signifies that you are in a "Simulation Mode" where network authority is disabled.
-- **Persistence**: The world resets on every reload. This is a design choice to prevent hardware/browser lockouts in case of a crash caused by extreme stress tests.
-- **Workers**: Even in the playground, the **3-Worker Topology** (Main, Game, Render) is preserved to ensure performance parity with the production client.
+- **Authoritative Validation**: Network authority is always enabled. The client no longer runs a local sandbox simulation; all state transitions are derived from server-replicated snapshots.
+- **VS-01 Compliance**: The scope is strictly limited to "One Ship, One Sector" validation. Extraneous sandbox features (manual spawning, local stress tests) have been removed to ensure the playground remains a focused validation tool.
+- **3-Worker Topology**: The **Main, Game, Render** worker model remains active, providing a true-to-life environment for performance benchmarking.
+- **Client-Side Prediction**: Simulation of local player transformations is currently **optional and disabled by default** to ensure absolute parity with server authoritative state during VS-01 validation.
+    - **Status**: Pure Server-Authority (Local simulation is OFF).
+    - **How to Enable**: Modify `ClientWorld::new()` in `crates/aetheris-client-wasm/src/world_state.rs` to call `with_prediction(true)` instead of `false`. This will activate local input replay and reconciliation.
 
 ---
 
@@ -76,9 +62,9 @@ Click the **Stress Test** button to instantly populate the viewport with 200 ran
 
 | Issue | Solution |
 | :--- | :--- |
-| **Canvas is blank** | Ensure `SharedArrayBuffer` is enabled in your browser (requires COOP/COEP headers, usually handled automatically by `just playground` or `just playground-tls`, and also applies to `just dev`). |
-| **FPS is low** | Check if your browser has **WebGPU** hardware acceleration enabled. Check `chrome://gpu` on Chromium-based browsers. |
-| **WASM build fails** | Ensure you have the `nightly-2025-07-01` toolchain installed: `rustup toolchain install nightly-2025-07-01`. |
+| **"Authentication Required"** | You must log in via the Access Control panel before starting a session. |
+| **RTT is "N/A"** | Ensure the server is running and the WebTransport connection has been established. |
+| **Canvas is blank** | Ensure `SharedArrayBuffer` and **WebGPU** are supported and enabled in your browser. |
 
 ---
-*Ready for integration. See you in the vacuum, Pilot.*
+*Validation complete. Stay aligned, Pilot.*

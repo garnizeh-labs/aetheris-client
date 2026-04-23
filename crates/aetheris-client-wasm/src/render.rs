@@ -872,7 +872,7 @@ impl RenderState {
         });
 
         // Smooth camera follow (lerp)
-        let lerp_factor = 0.1;
+        let lerp_factor = 0.3;
         self.camera_current = self.camera_current.lerp(self.camera_target, lerp_factor);
 
         // 2. Update Camera Uniform

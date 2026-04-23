@@ -49,6 +49,7 @@
             overflow: hidden;
             height: 100vh;
             position: relative;
+            cursor: none; /* Hide mouse in world */
         }
 
         body::before {
@@ -81,11 +82,14 @@
          * ════════════════════════════════════════ */
         #engine-canvas {
             position: fixed;
-            inset: 0;
-            width: 100vw;
+            top: 0;
+            bottom: 0;
+            left: calc(var(--world-sidebar-width) + (var(--world-sidebar-gap) * 2));
+            width: calc(100vw - (var(--world-sidebar-width) + (var(--world-sidebar-gap) * 2)));
             height: 100vh;
             background: #000;
             z-index: var(--engine-z-canvas);
+            cursor: none;
         }
 
         /* ════════════════════════════════════════
@@ -108,6 +112,7 @@
             border-top: 1px solid var(--glass-border);
             border-bottom: 1px solid var(--glass-border);
             box-shadow: var(--sidebar-shadow);
+            cursor: default; /* Show mouse in panel */
         }
 
         .sidebar-header {
@@ -864,14 +869,12 @@
                 <h1 class="sidebar-title">Playground</h1>
             </div>
             <div style="display: flex; gap: 8px; justify-content: center; margin-top: 8px;">
-                <span id="infra-badge" class="mode-badge" role="status">INFRA: SANDBOX</span>
-                <span id="engine-badge" class="mode-badge" role="status">ENGINE: LOCAL</span>
+                <span id="infra-badge" class="mode-badge" role="status">INFRA: LIVE</span>
+                <span id="engine-badge" class="mode-badge" role="status">ENGINE: SERVER CTRL</span>
             </div>
         </div>
 
         <div class="sidebar-body">
-
-            <!-- Auth section moved to bottom as 'Session' -->
 
             <!-- 1. System Manifest -->
             <div id="section-system" class="section">
@@ -922,16 +925,6 @@
                             <span class="label">Entities</span>
                             <span id="stat-entities" class="value">0</span>
                         </div>
-                        <div class="stat">
-                            <span class="label">Dropped</span>
-                            <span id="stat-dropped" class="value">0</span>
-                        </div>
-                        <div class="stat-divider"></div>
-                        <div class="stat">
-                            <span class="label">SAB</span>
-                            <span id="stat-session-buffer" style="display:none"></span>
-                            <span id="stat-sab" class="value">IDLE</span>
-                        </div>
                     </div>
                 </div>
             </div>
@@ -953,55 +946,15 @@
                 </div>
             </div>
 
-            <!-- 4. Entity Spawner -->
-            <div id="section-entities" class="section">
-                <span class="section-title">ENTITY SPAWNER <span class="chevron">▼</span></span>
+            <!-- 4. Session Control -->
+            <div id="section-session" class="section">
+                <span class="section-title">SESSION CONTROL <span class="chevron">▼</span></span>
                 <div class="section-body">
-                    <div class="button-grid">
-                        <button onclick="spawn(1)">Interceptor</button>
-                        <button onclick="spawn(3)">Dreadnought</button>
-                        <button onclick="spawn(4)">Hauler</button>
-                        <button onclick="spawn(5)">Asteroid</button>
-                    </div>
+                    <button class="primary" id="btn-start" onclick="toggleSession()" style="display: none;">START SESSION (SPAWN SHIP)</button>
                 </div>
             </div>
 
-            <!-- 5. Simulation Controls -->
-            <div id="section-simulation" class="section">
-                <span class="section-title">SIMULATION CONTROLS <span class="chevron">▼</span></span>
-                <div class="section-body">
-                    <div class="radio-container">
-                        <span class="radio-label">Element Rotation</span>
-                        <div class="radio-group" id="rotation-group" role="radiogroup" aria-label="Element rotation">
-                            <label><input type="radio" name="rotation" value="true" onchange="toggleRotation(true)"> ON</label>
-                            <label><input type="radio" name="rotation" value="false" checked onchange="toggleRotation(false)"> OFF</label>
-                        </div>
-                    </div>
-                    
-                    <div style="display: flex; flex-direction: column; gap: 8px; margin-top: 4px;">
-                        <button class="primary" id="btn-start" onclick="toggleSession()" style="display: none;">START SESSION (SPAWN SHIP)</button>
-                        <div class="button-grid">
-                            <button onclick="stressTest(200)">STRESS 200</button>
-                            <button class="danger" onclick="clearWorld()">CLEAR WORLD</button>
-                        </div>
-                    </div>
-                </div>
-            </div>
-
-            <!-- 6. Aesthetics (Closed) -->
-            <div id="section-aesthetics" class="section collapsed" style="margin-top: auto; border-top: 1px solid var(--border-subtle);">
-                <span class="section-title">INTERFACE AESTHETICS <span class="chevron">▼</span></span>
-                <div class="section-body">
-                    <div style="display: flex; flex-direction: column; gap: 8px;">
-                        <label for="theme-selector" style="font-size: 0.75rem; color: var(--text-secondary);">Active Theme</label>
-                        <select id="theme-selector" aria-label="Select interface theme">
-                            <!-- Populated by playground.ts -->
-                        </select>
-                    </div>
-                </div>
-            </div>
-
-            <!-- 7. Access Control (Last) -->
+            <!-- 5. Access Control (Last) -->
             <div id="section-auth" class="section">
                 <span class="section-title">ACCESS CONTROL <span class="chevron">▼</span></span>
                 <div class="section-body">
@@ -1050,7 +1003,6 @@
     <script>
         /* Global helpers for inline event handlers.
          * Delegate to the AetherisPlayground instance once initialized. */
-        function spawn(type) { window.playground?.spawn(type, event); }
         function toggleSession() { 
             if (window.playground?.isSessionActive) {
                 window.playground?.clear(event);
@@ -1058,9 +1010,6 @@
                 window.playground?.start(event);
             }
         }
-        function toggleRotation(on) { window.playground?.toggleRotation(on); }
-        function stressTest(count) { window.playground?.stressTest(count, event); }
-        function clearWorld() { window.playground?.clear(event); }
         function requestOtp() { window.playground?.requestOtp(document.getElementById('auth-email').value); }
         function login() { window.playground?.login(document.getElementById('auth-otp').value); }
         function logout() { window.playground?.logout(); }

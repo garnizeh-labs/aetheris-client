@@ -75,11 +75,9 @@ pub struct SabHeader {
     pub room_max_x: core::sync::atomic::AtomicU32, // Offset 24
     pub room_max_y: core::sync::atomic::AtomicU32, // Offset 28
     /// Seqlock counter for room bounds. Odd = write in progress; even = stable.
-    /// Writer bumps to odd before writing the four bounds fields, then to even (Release)
-    /// after. Readers spin until they observe two equal even values around their reads.
     pub room_bounds_seq: core::sync::atomic::AtomicU32, // Offset 32
-    /// Alignment padding to 40 bytes.
-    pub pad: core::sync::atomic::AtomicU32, // Offset 36
+    /// Sub-tick progress (0.0 to 1.0) for visual interpolation.
+    pub sub_tick_fraction: core::sync::atomic::AtomicU32, // Offset 36
 }
 
 /// Total size in bytes required for the compact replication layout.
@@ -178,6 +176,19 @@ impl SharedWorld {
         self.header().tick.load(Ordering::Acquire)
     }
 
+    /// Returns the sub-tick progress fraction (0.0 to 1.0).
+    #[must_use]
+    pub fn sub_tick_fraction(&self) -> f32 {
+        f32::from_bits(self.header().sub_tick_fraction.load(Ordering::Acquire))
+    }
+
+    /// Updates the sub-tick progress fraction.
+    pub fn set_sub_tick_fraction(&mut self, fraction: f32) {
+        self.header()
+            .sub_tick_fraction
+            .store(fraction.to_bits(), Ordering::Release);
+    }
+
     /// Returns a slice of the entities in the buffer index i.
     #[allow(clippy::cast_ptr_alignment)]
     fn get_buffer(&self, idx: usize) -> &[SabSlot] {
@@ -221,14 +232,8 @@ impl SharedWorld {
         let active = self.active_index();
         let next_active = 1 - active;
 
-        // Store tick first; readers only use it for display, not for buffer selection.
-        self.header().tick.store(tick, Ordering::Release);
-
-        // Pack entity_count (high 32 bits) and next_active flip_bit (low 32 bits) into
-        // a single u64 and publish with one Release store. This guarantees that any
-        // reader that observes the new flip_bit also observes the matching entity_count,
-        // eliminating the TOCTOU window of the previous three-store sequence.
         let packed = (u64::from(entity_count) << 32) | u64::from(next_active);
+        self.header().tick.store(tick, Ordering::Release);
         self.header().state.store(packed, Ordering::Release);
     }
 

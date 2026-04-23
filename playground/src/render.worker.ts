@@ -64,14 +64,14 @@ self.onmessage = async (e) => {
     } else if (type === 'resize') {
         const { width, height } = e.data.payload;
         if (width > 0 && height > 0) {
-            console.log(`[RenderWorker] Resizing output surface to ${width}x${height}`);
+            console.debug(`[RenderWorker] Resizing output surface to ${width}x${height}`);
             if (client) client.resize(width, height);
         } else {
             console.warn(`[RenderWorker] Invalid resize request: ${width}x${height}`);
         }
     } else if (type === 'theme_changed') {
         const { bgBase, textPrimary } = e.data.payload;
-        console.log(`[RenderWorker] Theme changed: bg=${bgBase}, text=${textPrimary}`);
+        console.debug(`[RenderWorker] Theme changed: bg=${bgBase}, text=${textPrimary}`);
         if (client) {
             client.set_theme_colors(bgBase, textPrimary);
         }

@@ -112,7 +112,7 @@ mod wasm_impl {
     use crate::world_state::ClientWorld;
     use aetheris_encoder_serde::SerdeEncoder;
     use aetheris_protocol::events::{NetworkEvent, ReplicationEvent};
-    use aetheris_protocol::traits::{Encoder, GameTransport};
+    use aetheris_protocol::traits::{Encoder, GameTransport, WorldState};
     use aetheris_protocol::types::{
         ClientId, ComponentKind, InputCommand, NetworkId, PlayerInputKind,
     };
@@ -169,6 +169,15 @@ mod wasm_impl {
 
         pending_clear: bool,
         last_clear_tick: u64,
+
+        // Fixed-Timestep Simulation (M10105/M1020)
+        last_process_time: f64,
+        tick_accumulator: f64,
+
+        // Playground Input Buffering
+        playground_move_x: f32,
+        playground_move_y: f32,
+        playground_actions: u32,
     }
 
     #[wasm_bindgen]
@@ -268,6 +277,11 @@ mod wasm_impl {
                 last_input_actions: Vec::new(),
                 pending_clear: false,
                 last_clear_tick: 0,
+                last_process_time: crate::performance_now(),
+                tick_accumulator: 0.0,
+                playground_move_x: 0.0,
+                playground_move_y: 0.0,
+                playground_actions: 0,
             })
         }
 
@@ -585,8 +599,9 @@ mod wasm_impl {
         #[wasm_bindgen]
         pub fn playground_apply_input(&mut self, move_x: f32, move_y: f32, actions_mask: u32) {
             self.check_worker();
-            self.world_state
-                .playground_apply_input(move_x, move_y, actions_mask);
+            self.playground_move_x = move_x;
+            self.playground_move_y = move_y;
+            self.playground_actions = actions_mask;
         }
 
         /// Simulation tick called by the Network Worker at a fixed rate (e.g. 20Hz).
@@ -684,7 +699,7 @@ mod wasm_impl {
                                                 aetheris_protocol::events::GameEvent::SystemManifest {
                                                     manifest,
                                                 } => {
-                                                    tracing::info!(
+                                                    tracing::debug!(
                                                         count = manifest.len(),
                                                         "Received SystemManifest from server"
                                                     );
@@ -860,22 +875,61 @@ mod wasm_impl {
                     }
                 } else {
                     if !updates.is_empty() {
+                        let max_tick = updates.iter().map(|(_, u)| u.tick).max().unwrap_or(0);
+
+                        // M1020 — Sync client clock to server on first authoritative update
+                        if self.first_playground_tick && max_tick > 0 {
+                            tracing::info!(
+                                max_tick,
+                                "Syncing client latest_tick to server heartbeat"
+                            );
+                            self.world_state.latest_tick = max_tick;
+                            self.first_playground_tick = false;
+                        }
+
                         tracing::debug!(count = updates.len(), "Applying server updates to world");
+                        self.world_state.apply_updates(&updates);
                     }
-                    self.world_state.apply_updates(&updates);
                 }
             }
 
-            // 2.5. Client-side rotation animation (local, not replicated by server)
-            if self.playground_rotation_enabled {
-                for slot in self.world_state.entities.values_mut() {
-                    slot.rotation = (slot.rotation + 0.05) % std::f32::consts::TAU;
+            // 2.5. Fixed-Timestep Simulation Loop (M1020)
+            // The JS side (game.worker.ts) already calls tick() at ~60Hz via setTimeout.
+            // Using `if` instead of `while` prevents double-stepping when the JS timer fires
+            // slightly late (e.g. 17ms instead of 16.67ms): accumulated drift of ~0.33ms/frame
+            // would otherwise cause a second physics step every ~50 frames, causing ship lurches.
+            let now = crate::performance_now();
+            let delta_ms = now - self.last_process_time;
+            self.last_process_time = now;
+
+            // Limit delta to prevent "spiral of death" after long freezes (max 5 frames)
+            let delta_ms = delta_ms.min(100.0);
+            self.tick_accumulator += delta_ms;
+
+            const DT_MS: f64 = 1000.0 / 60.0;
+            while self.tick_accumulator >= DT_MS {
+                // 1. Apply buffered playground input locally (Prediction)
+                let applied = self.world_state.playground_apply_input(
+                    self.playground_move_x,
+                    self.playground_move_y,
+                    self.playground_actions,
+                );
+
+                if !applied && self.world_state.latest_tick % 120 == 0 {
+                    tracing::warn!(tick = self.world_state.latest_tick, "Simulation loop running but no LocalPlayer (0x04) entity found to apply input to");
                 }
+
+                // 2. Advance global tick
+                self.world_state.latest_tick += 1;
+                self.tick_accumulator -= DT_MS;
             }
 
-            // Advance local tick every frame so the render worker always sees a new snapshot,
-            // even when the server sends no updates (static entities, client-side animation).
-            self.world_state.latest_tick += 1;
+            // 2.5.5. Publish sub-tick fraction for smooth rendering (M10105)
+            let fraction = (self.tick_accumulator as f32 / DT_MS as f32).clamp(0.0, 1.0);
+            self.shared_world.set_sub_tick_fraction(fraction);
+            tracing::trace!(fraction, "Updated sub-tick fraction");
+
+            // 2.6. Client-side rotation animation (local, not replicated by server)
 
             // M10105 — measure simulation time
             let sim_start = crate::performance_now();
@@ -1059,7 +1113,7 @@ mod wasm_impl {
             let target_id = if let Some(owned_id) = self.world_state.player_network_id {
                 // If we have an explicit possession ID from the server, use it.
                 // This is the most reliable method (M1038).
-                tracing::info!(
+                tracing::trace!(
                     network_id = owned_id.0,
                     "[send_input] Using player_network_id for input target"
                 );
@@ -1084,7 +1138,7 @@ mod wasm_impl {
                 return Ok(());
             };
 
-            tracing::info!(
+            tracing::trace!(
                 target_id = target_id.0,
                 move_x,
                 move_y,
@@ -1137,7 +1191,7 @@ mod wasm_impl {
                         "Client sending input (repeated)"
                     );
                 } else {
-                    tracing::info!(tick, move_x, move_y, actions_mask, "Client sending input");
+                    tracing::trace!(tick, move_x, move_y, actions_mask, "Client sending input");
                 }
             }
 
@@ -1153,7 +1207,7 @@ mod wasm_impl {
                     "Sending InputCommand (repeated)"
                 );
             } else {
-                tracing::info!(?target_id, x = move_x, y = move_y, "Sending InputCommand");
+                tracing::trace!(?target_id, x = move_x, y = move_y, "Sending InputCommand");
             }
 
             // Update last input state
@@ -1275,32 +1329,41 @@ mod wasm_impl {
         }
 
         #[wasm_bindgen]
-        pub async fn tick_playground(&mut self) {
+        pub fn tick_playground(&mut self) {
             self.check_worker();
-
-            // M10105 — emit tick_playground_loop_start lifecycle span
-            if self.first_playground_tick {
-                self.first_playground_tick = false;
-                with_collector(|c| {
-                    c.push_event(
-                        1,
-                        "wasm_client",
-                        "Playground simulation loop started",
-                        "tick_playground_loop_start",
-                        None,
-                    );
-                });
-            }
 
             // M10105 — measure simulation time
             let sim_start = crate::performance_now();
             self.world_state.latest_tick += 1;
 
-            if self.playground_rotation_enabled {
+            // Apply local physics simulation for playground entities
+            self.world_state.simulate();
+
+            /* if self.playground_rotation_enabled {
                 for slot in self.world_state.entities.values_mut() {
                     slot.rotation = (slot.rotation + 0.05) % std::f32::consts::TAU;
                 }
+            } */
+
+            // Diagnostic log for player ship
+            if let Some(player_id) = self.world_state.player_network_id {
+                if let Some(ship) = self.world_state.entities.get(&player_id) {
+                    if self.world_state.latest_tick % 60 == 0 {
+                        tracing::info!(
+                            tick = self.world_state.latest_tick,
+                            x = ship.x,
+                            y = ship.y,
+                            dx = ship.dx,
+                            dy = ship.dy,
+                            rot = ship.rotation,
+                            "Playground Ship State"
+                        );
+                    }
+                }
             }
+
+            // M10105 — Publish sub-tick fraction (0.0 for fixed-step playground)
+            self.shared_world.set_sub_tick_fraction(0.0);
 
             // Sync to shared world
             let count = self.world_state.entities.len() as u32;
@@ -1341,42 +1404,67 @@ mod wasm_impl {
                 count.set(current + 1);
             });
 
-            if tick == 0 {
-                // Background only or placeholder if no simulation is running yet
-                let mut frame_time_ms = 0.0;
-                if let Some(state) = &mut self.render_state {
-                    frame_time_ms = state.render_frame_with_compact_slots(&[]);
-                    with_collector(|c| {
-                        // FPS is computed in the worker; we only report duration here.
-                        // FPS=0 here as it is not authoritative.
-                        c.record_frame(frame_time_ms, 0.0);
-                    });
-                }
-                return frame_time_ms;
+            // 1. Buffer new snapshots — only push when tick advances
+            let back_tick = self.snapshots.back().map(|s| s.tick).unwrap_or(0);
+            if tick < back_tick && tick != 0 {
+                tracing::warn!(
+                    tick,
+                    back_tick,
+                    "Simulation time went backwards! Clearing snapshot buffer."
+                );
+                self.snapshots.clear();
             }
 
-            // 1. Buffer new snapshots — only push when tick advances
-            if self.snapshots.is_empty()
-                || tick > self.snapshots.back().map(|s| s.tick).unwrap_or(0)
-            {
+            if self.snapshots.is_empty() || tick > back_tick {
+                tracing::trace!(tick, "Pushing new snapshot to buffer");
                 self.snapshots.push_back(SimulationSnapshot {
                     tick,
                     entities: entities.to_vec(),
                 });
+            } else if tick == back_tick && tick != 0 {
+                // Diagnostic for stagnant tick
+                thread_local! {
+                    static STAGNANT_COUNT: core::cell::Cell<u64> = core::cell::Cell::new(0);
+                }
+                STAGNANT_COUNT.with(|count| {
+                    let cur = count.get() + 1;
+                    if cur % 300 == 0 {
+                        tracing::warn!(tick, "Render loop stalled on same tick for 300 frames");
+                    }
+                    count.set(cur);
+                });
             }
 
-            // 2. Calculate target playback tick.
+            // 2. Calculate target playback tick with high-precision sub-tick fraction.
             // Stay 2 ticks behind latest so we always have an (s1, s2) interpolation pair.
-            // This is rate-independent: works for both the 20 Hz server and the 60 Hz playground.
-            let mut frame_time_ms = 0.0;
+            // We use the shared_world's sub_tick_fraction to smoothly transition between
+            // simulation steps at the monitor's full refresh rate (e.g. 144Hz).
+            let latest_tick = self.snapshots.back().map(|s| s.tick as f32).unwrap_or(0.0);
+            let fraction = self.shared_world.sub_tick_fraction();
+            let mut target_tick = latest_tick - 1.0 + fraction;
+
+            // Ensure target_tick is within available snapshot range if possible
             if !self.snapshots.is_empty() {
-                let latest_tick = self.snapshots.back().unwrap().tick as f32;
-                let target_tick = latest_tick - 2.0;
-                frame_time_ms = self.render_at_tick(target_tick);
+                let oldest_tick = self.snapshots[0].tick as f32;
+                if target_tick < oldest_tick {
+                    target_tick = oldest_tick;
+                }
             }
+
+            let ent_count = entities.len();
+            let frame_time_ms = self.render_at_tick(target_tick);
 
             // M10105 — record accurate frame time (from WGPU) + snapshot depth.
             let snap_count = self.snapshots.len() as u32;
+            if tick % 60 == 0 {
+                tracing::trace!(
+                    tick,
+                    ent_count,
+                    snap_count,
+                    target_tick,
+                    "Render Loop Active"
+                );
+            }
             with_collector(|c| {
                 // FPS is computed in the worker; we only report duration here.
                 c.record_frame(frame_time_ms, 0.0);

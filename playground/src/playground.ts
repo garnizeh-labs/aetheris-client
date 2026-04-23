@@ -3,7 +3,7 @@
 import { shortcuts } from './shortcuts';
 import { WorldRegistry } from './world-registry';
 
-const CONNECTED_MODE = import.meta.env.VITE_PLAYGROUND_CONNECTED === 'true';
+const CONNECTED_MODE = true; // Always connected for VS-01+ authoritative validation
 
 // Declared globally via vite.config.ts
 declare const __APP_VERSION__: string;
@@ -69,9 +69,7 @@ class AetherisPlayground {
         this.gameWorker.onerror = (e) => this.handleFatalError('Game Worker Thread crashed', e);
         this.renderWorker.onerror = (e) => this.handleFatalError('Render Worker Thread crashed', e);
 
-        const modeLabel = CONNECTED_MODE ? 'CONNECTED' : 'ISOLATED';
-        const modeColor = CONNECTED_MODE ? '#4ade80' : '#38bdf8';
-        console.log(`%cAetheris Engine — PLAYGROUND (${modeLabel})`, `color: ${modeColor}; font-weight: bold; font-size: 1.2em; border-bottom: 2px solid ${modeColor};`);
+        console.log(`%cAetheris Engine — PLAYGROUND`, `color: #4ade80; font-weight: bold; font-size: 1.2em; border-bottom: 2px solid #4ade80;`);
 
         this.applyMode();
         this.world.syncThemeToWorker(); // Force initial color sync (THEME_WORLD_DESIGN §3.4.1)
@@ -167,26 +165,14 @@ class AetherisPlayground {
     }
 
     private applyMode() {
-        const sectionEntities = document.getElementById('section-entities');
-        const sectionSimulation = document.getElementById('section-simulation');
+        document.title = "Aetheris Playground — Live Mode";
+        this.updateBadgeStatus('live');
+        
         const sectionSystem = document.getElementById('section-system');
-        if (CONNECTED_MODE) {
-            document.title = "Aetheris Playground — Live Mode";
-            this.updateBadgeStatus('live');
-            // Spawner/simulation controls are server-authoritative in this mode, but hidden until login
-            if (sectionEntities) sectionEntities.style.display = 'none';
-            if (sectionSimulation) sectionSimulation.style.display = 'none';
-            if (sectionSystem) sectionSystem.style.display = 'flex';
-            const authSection = document.getElementById('section-auth');
-            if (authSection) authSection.style.display = 'flex';
-        } else {
-            document.title = "Aetheris Playground — Sandbox Mode";
-            this.updateBadgeStatus('isolated');
-            if (sectionSimulation) sectionSimulation.style.display = 'flex';
-            if (sectionSystem) sectionSystem.style.display = 'flex';
-            const authSection = document.getElementById('section-auth');
-            if (authSection) authSection.style.display = 'none';
-        }
+        if (sectionSystem) sectionSystem.style.display = 'flex';
+        
+        const authSection = document.getElementById('section-auth');
+        if (authSection) authSection.style.display = 'flex';
 
         // M10105 — Performance: pause workers when tab is hidden to prevent lag on resume
         document.addEventListener('visibilitychange', () => {
@@ -218,7 +204,7 @@ class AetherisPlayground {
         const dpr = window.devicePixelRatio || 1;
         canvas.width = Math.floor(canvas.clientWidth * dpr);
         canvas.height = Math.floor(canvas.clientHeight * dpr);
-        console.log(`[Playground] Initial Canvas Size: ${canvas.width}x${canvas.height} (DPR=${dpr})`);
+        console.debug(`[Playground] Initial Canvas Size: ${canvas.width}x${canvas.height} (DPR=${dpr})`);
 
         // Handle resizing — recompute dpr each time to pick up display changes
         const resizeObserver = new ResizeObserver(entries => {
@@ -229,7 +215,7 @@ class AetherisPlayground {
                     const physicalWidth = Math.floor(width * currentDpr);
                     const physicalHeight = Math.floor(height * currentDpr);
 
-                    console.log(`[Playground] Resize detected: ${width}x${height} (CSS) -> ${physicalWidth}x${physicalHeight} (Physical, DPR=${currentDpr})`);
+                    console.debug(`[Playground] Resize detected: ${width}x${height} (CSS) -> ${physicalWidth}x${physicalHeight} (Physical, DPR=${currentDpr})`);
 
                     this.renderWorker.postMessage({
                         type: 'resize',
@@ -358,6 +344,7 @@ class AetherisPlayground {
                 }
 
                 if (!this.heldKeys.has(e.code)) {
+                    console.debug(`[Playground] KeyDown event: ${e.code}`);
                     this.heldKeys.add(e.code);
                     this.updateInputUI();
                     this.gameWorker.postMessage({
@@ -392,57 +379,7 @@ class AetherisPlayground {
         // Expose to window for global helper functions in playground.html
         (window as any).playground = this;
 
-        if (CONNECTED_MODE) {
-            this.initConnected(offscreen);
-        } else {
-            this.initIsolated(offscreen);
-        }
-    }
-
-    /** Isolated mode: client-authoritative simulation, no server. */
-    private initIsolated(offscreen: OffscreenCanvas) {
-        this.gameWorker.postMessage({
-            type: 'init_playground',
-            memory: this.memory
-        });
-
-        this.gameWorker.onmessage = (e) => {
-            const { type, sharedWorldPtr, payload } = e.data;
-
-            if (type === 'ready') {
-                this.renderWorker.postMessage({
-                    type: 'init',
-                    memory: this.memory,
-                    sharedWorldPtr,
-                    canvas: offscreen
-                }, [offscreen]);
-
-                // M10105 — route metrics_frame from render worker to game worker
-                this.renderWorker.onmessage = (re) => {
-                    if (re.data?.type === 'metrics_frame') {
-                        this.gameWorker.postMessage(re.data);
-                    }
-                };
-
-                this.statusEl.innerText = 'PLAYGROUND ONLINE';
-
-                const sabStat = document.getElementById('stat-sab');
-                if (sabStat) sabStat.innerText = `0x${sharedWorldPtr.toString(16).toUpperCase()}`;
-
-                const bufferStat = document.getElementById('stat-session-buffer');
-                if (bufferStat) {
-                    bufferStat.innerText = `[${(this.memory.buffer.byteLength / 1024 / 1024).toFixed(1)}MB] `;
-                    bufferStat.style.display = 'inline';
-                }
-
-                // Replay active theme: render worker was not ready during boot-time sync.
-                this.world.syncThemeToWorker();
-                this.startMonitoring();
-                console.log('[Playground] Isolated mode ready.');
-            } else if (type === 'wasm_metrics') {
-                this.updateWasmMetrics(payload);
-            }
-        };
+        this.initConnected(offscreen);
     }
 
     /**
@@ -654,51 +591,13 @@ class AetherisPlayground {
         };
     }
 
-    /** Spawns a single entity at a random position. */
-    spawn(type: number, event?: MouseEvent) {
-        if (event) (event.target as HTMLElement).blur();
-        this.entityCount++;
-        const x = (Math.random() - 0.5) * 40;
-        const y = (Math.random() - 0.5) * 40;
-        const rot = Math.random() * Math.PI * 2;
-        this.gameWorker.postMessage({
-            type: 'p_spawn',
-            payload: { type, x, y, rot }
-        });
-        this.updateEntityCount();
-    }
 
-    /** Spawns $N$ randomized entities for performance testing. */
-    stressTest(count: number, event?: MouseEvent) {
-        if (event) (event.target as HTMLElement).blur();
-        // Get rotation state from radio buttons
-        const rotationOn = (document.querySelector('input[name="rotation"]:checked') as HTMLInputElement)?.value === 'true';
 
-        this.entityCount = count;
-        this.gameWorker.postMessage({
-            type: CONNECTED_MODE ? 'p_stress_test_net' : 'p_stress_test',
-            payload: { count, rotate: rotationOn }
-        });
-        this.updateEntityCount();
-    }
-
-    /** Toggles global rotation simulation. */
-    toggleRotation(enabled: boolean) {
-        this.gameWorker.postMessage({
-            type: 'p_toggle_rotation',
-            payload: { enabled }
-        });
-    }
-
-    /** Starts the simulation by clearing the world and spawning a ship + asteroids. */
+    /** Starts the session by requesting a ship from the server. */
     start(event?: MouseEvent) {
         if (event) (event.target as HTMLElement).blur();
 
-        if (!CONNECTED_MODE) {
-            console.warn('[Playground] Start logic only optimized for CONNECTED mode currently.');
-        }
-
-        // 1. Clear world first so isSessionActive is reset before we set it.
+        // 1. Clear world first
         this.clear();
 
         // 2. Now mark session as active and update the UI.
@@ -706,27 +605,11 @@ class AetherisPlayground {
         this.updateSessionUI();
 
         // 3. Request session ship with Possession from the server.
-        // The server spawns an Interceptor (type 1) and sends back a Possession event.
         this.gameWorker.postMessage({ type: 'start_session' });
 
-        // 4. Spawn a cluster of asteroids to mine
-        for (let i = 0; i < 6; i++) {
-            const angle = (i / 6) * Math.PI * 2 + (Math.random() * 0.5);
-            const dist = 6 + Math.random() * 8;
-            this.gameWorker.postMessage({
-                type: 'p_spawn',
-                payload: {
-                    type: 5, // Asteroid
-                    x: Math.cos(angle) * dist,
-                    y: Math.sin(angle) * dist,
-                    rot: Math.random() * Math.PI * 2
-                }
-            });
-        }
-
-        this.entityCount = 7;
+        this.entityCount = 1;
         this.updateEntityCount();
-        this.statusEl.innerText = 'SESSION STARTED — Entities Spawned';
+        this.statusEl.innerText = 'SESSION STARTED — Awaiting Ship Possession';
     }
 
     /** Clears all entities from the playground. */
