@@ -39,6 +39,7 @@ ruzstd = "0.8.2"
 ulid = { workspace = true }
 wgpu = { workspace = true, features = ["webgpu"] }
 getrandom = { workspace = true }
+getrandom_v03 = { workspace = true }
 getrandom_v04 = { workspace = true }
 tracing-wasm = { workspace = true }
 console_error_panic_hook = { workspace = true }
