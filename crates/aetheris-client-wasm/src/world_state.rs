@@ -164,6 +164,30 @@ impl WorldState for ClientWorld {
     fn clear_world(&mut self) {
         self.entities.clear();
     }
+
+    fn state_hash(&self) -> u64 {
+        use std::collections::hash_map::DefaultHasher;
+        use std::hash::{Hash, Hasher};
+
+        let mut hasher = DefaultHasher::new();
+        self.latest_tick.hash(&mut hasher);
+
+        // BTreeMap iteration is already deterministic (sorted by key)
+        for (nid, slot) in &self.entities {
+            nid.hash(&mut hasher);
+            // SabSlot doesn't implement Hash, so we hash its fields manually
+            slot.x.to_bits().hash(&mut hasher);
+            slot.y.to_bits().hash(&mut hasher);
+            slot.z.to_bits().hash(&mut hasher);
+            slot.rotation.to_bits().hash(&mut hasher);
+            slot.hp.hash(&mut hasher);
+            slot.shield.hash(&mut hasher);
+            slot.entity_type.hash(&mut hasher);
+            slot.flags.hash(&mut hasher);
+        }
+
+        hasher.finish()
+    }
 }
 
 impl ClientWorld {
