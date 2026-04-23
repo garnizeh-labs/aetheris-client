@@ -52,7 +52,7 @@ jobs:
       # web-sys gates WebTransport and other unstable APIs behind this cfg.
       # Required even for host-target checks because the feature list in
       # aetheris-client-wasm/Cargo.toml enables those features unconditionally.
-      RUSTFLAGS: "-D warnings --cfg=web_sys_unstable_apis"
+      RUSTFLAGS: "-D warnings --cfg=web_sys_unstable_apis --cfg getrandom_backend=\"wasm_js\""
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
       - uses: dtolnay/rust-toolchain@e97e2d8cc328f1b50210efc529dca0028893a2d9 # 1.95.0
@@ -96,7 +96,7 @@ jobs:
         run: sudo apt-get update -y && sudo apt-get install -y protobuf-compiler
       - name: Build WASM
         run: |
-          RUSTFLAGS="-C target-feature=+atomics,+bulk-memory,+mutable-globals -C link-arg=--shared-memory -C link-arg=--import-memory --cfg=web_sys_unstable_apis" \
+          RUSTFLAGS="-C target-feature=+atomics,+bulk-memory,+mutable-globals -C link-arg=--shared-memory -C link-arg=--import-memory --cfg=web_sys_unstable_apis --cfg getrandom_backend=\"wasm_js\"" \
           cargo +nightly-2025-07-01 build \
             -p aetheris-client-wasm \
             --target wasm32-unknown-unknown \
@@ -126,7 +126,7 @@ jobs:
     runs-on: ubuntu-latest
     env:
       RUSTDOCFLAGS: "-D warnings"
-      RUSTFLAGS: "-D warnings --cfg=web_sys_unstable_apis"
+      RUSTFLAGS: "-D warnings --cfg=web_sys_unstable_apis --cfg getrandom_backend=\"wasm_js\""
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
       - uses: dtolnay/rust-toolchain@e97e2d8cc328f1b50210efc529dca0028893a2d9 # 1.95.0
@@ -143,7 +143,7 @@ jobs:
     needs: [fmt, security, clippy]
     runs-on: ubuntu-latest
     env:
-      RUSTFLAGS: "-D warnings --cfg=web_sys_unstable_apis"
+      RUSTFLAGS: "-D warnings --cfg=web_sys_unstable_apis --cfg getrandom_backend=\"wasm_js\""
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
       - uses: dtolnay/rust-toolchain@e97e2d8cc328f1b50210efc529dca0028893a2d9 # 1.95.0
