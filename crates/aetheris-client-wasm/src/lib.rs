@@ -178,6 +178,7 @@ mod wasm_impl {
         playground_move_x: f32,
         playground_move_y: f32,
         playground_actions: u32,
+        last_fraction: f32,
     }
 
     #[wasm_bindgen]
@@ -282,6 +283,7 @@ mod wasm_impl {
                 playground_move_x: 0.0,
                 playground_move_y: 0.0,
                 playground_actions: 0,
+                last_fraction: 0.0,
             })
         }
 
@@ -877,14 +879,19 @@ mod wasm_impl {
                     if !updates.is_empty() {
                         let max_tick = updates.iter().map(|(_, u)| u.tick).max().unwrap_or(0);
 
-                        // M1020 — Sync client clock to server on first authoritative update
-                        if self.first_playground_tick && max_tick > 0 {
-                            tracing::info!(
-                                max_tick,
-                                "Syncing client latest_tick to server heartbeat"
-                            );
-                            self.world_state.latest_tick = max_tick;
-                            self.first_playground_tick = false;
+                        // M1020 — Continuous Clock Sync to prevent 1-2s rubber-banding
+                        if max_tick > 0 {
+                            let drift = (self.world_state.latest_tick as i32 - max_tick as i32).abs();
+                            if self.first_playground_tick || drift > 20 {
+                                tracing::info!(
+                                    latest = self.world_state.latest_tick,
+                                    server = max_tick,
+                                    drift,
+                                    "Syncing client latest_tick to server heartbeat"
+                                );
+                                self.world_state.latest_tick = max_tick;
+                                self.first_playground_tick = false;
+                            }
                         }
 
                         tracing::debug!(count = updates.len(), "Applying server updates to world");
@@ -927,8 +934,11 @@ mod wasm_impl {
             }
 
             // 2.5.5. Publish sub-tick fraction for smooth rendering (M10105)
+            // Use EMA smoothing to prevent jitter from browser timer noise
             let fraction = (self.tick_accumulator as f32 / DT_MS as f32).clamp(0.0, 1.0);
-            self.shared_world.set_sub_tick_fraction(fraction);
+            let alpha = 0.8;
+            self.last_fraction = self.last_fraction * (1.0 - alpha) + fraction * alpha;
+            self.shared_world.set_sub_tick_fraction(self.last_fraction);
             tracing::trace!(fraction, "Updated sub-tick fraction");
 
             // 2.6. Client-side rotation animation (local, not replicated by server)
@@ -1336,46 +1346,51 @@ mod wasm_impl {
 
             // M10105 — measure simulation time
             let sim_start = crate::performance_now();
-            self.world_state.latest_tick += 1;
 
-            // Apply local physics simulation for playground entities
-            self.world_state.simulate();
+            let now = crate::performance_now();
+            let delta_ms = now - self.last_process_time;
+            self.last_process_time = now;
 
-            /* if self.playground_rotation_enabled {
-                for slot in self.world_state.entities.values_mut() {
-                    slot.rotation = (slot.rotation + 0.05) % std::f32::consts::TAU;
-                }
-            } */
+            // Limit delta to prevent "spiral of death" (max 5 frames)
+            let delta_ms = delta_ms.min(100.0);
+            self.tick_accumulator += delta_ms;
 
-            // Diagnostic log for player ship
-            if let Some(player_id) = self.world_state.player_network_id {
-                if let Some(ship) = self.world_state.entities.get(&player_id) {
-                    if self.world_state.latest_tick % 60 == 0 {
-                        tracing::info!(
-                            tick = self.world_state.latest_tick,
-                            x = ship.x,
-                            y = ship.y,
-                            dx = ship.dx,
-                            dy = ship.dy,
-                            rot = ship.rotation,
-                            "Playground Ship State"
-                        );
-                    }
-                }
+            const DT_MS: f64 = 1000.0 / 60.0;
+            let mut steps = 0;
+            while self.tick_accumulator >= DT_MS {
+                self.world_state.latest_tick += 1;
+
+                // 1. Apply playground input (respected by prediction_enabled flag internally)
+                self.world_state.playground_apply_input(
+                    self.playground_move_x,
+                    self.playground_move_y,
+                    self.playground_actions,
+                );
+
+                // 2. Local physics simulation
+                self.world_state.simulate();
+
+                self.tick_accumulator -= DT_MS;
+                steps += 1;
             }
 
-            // M10105 — Publish sub-tick fraction (0.0 for fixed-step playground)
-            self.shared_world.set_sub_tick_fraction(0.0);
+            // Sync to shared world if we simulated at least one step
+            if steps > 0 {
+                // Publish sub-tick fraction for smooth rendering (M10105)
+                let fraction = (self.tick_accumulator as f32 / DT_MS as f32).clamp(0.0, 1.0);
+                let alpha = 0.8;
+                self.last_fraction = self.last_fraction * (1.0 - alpha) + fraction * alpha;
+                self.shared_world.set_sub_tick_fraction(self.last_fraction);
 
-            // Sync to shared world
-            let count = self.world_state.entities.len() as u32;
-            self.flush_to_shared_world(self.world_state.latest_tick);
+                let count = self.world_state.entities.len() as u32;
+                self.flush_to_shared_world(self.world_state.latest_tick);
 
-            let sim_time_ms = crate::performance_now() - sim_start;
-            with_collector(|c| {
-                c.record_sim(sim_time_ms);
-                c.update_entity_count(count);
-            });
+                let sim_time_ms = crate::performance_now() - sim_start;
+                with_collector(|c| {
+                    c.record_sim(sim_time_ms);
+                    c.update_entity_count(count);
+                });
+            }
         }
 
         /// Render frame called by the Render Worker.

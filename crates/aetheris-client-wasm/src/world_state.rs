@@ -500,11 +500,11 @@ impl ClientWorld {
 impl ClientWorld {
     /// Internal simulation step used for prediction and reconciliation.
     fn simulate_slot(slot: &mut SabSlot, move_x: f32, move_y: f32) {
-        const THRUST_FORCE: f32 = 10000.0;
+        const THRUST_FORCE: f32 = 8000.0;
         const BASE_MASS: f32 = 100.0;
         const MASS_PER_ORE: f32 = 2.0;
         const DRAG: f32 = 2.0;
-        const MAX_SPEED: f32 = 100.0;
+        const MAX_SPEED: f32 = 75.0;
         const DT: f32 = 1.0 / 60.0;
 
         // 1.0. Calculate total mass (M1038 Cargo Penalty)
@@ -548,7 +548,12 @@ impl ClientWorld {
             let diff = (target_rot - current_rot + std::f32::consts::PI)
                 .rem_euclid(std::f32::consts::TAU)
                 - std::f32::consts::PI;
-            slot.rotation += diff.clamp(-TURN_RATE * DT, TURN_RATE * DT);
+
+            if diff.abs() > 0.001 {
+                slot.rotation += diff.clamp(-TURN_RATE * DT, TURN_RATE * DT);
+            } else {
+                slot.rotation = target_rot;
+            }
         }
 
         // 6. Integrate position
@@ -599,11 +604,13 @@ impl ClientWorld {
         for slot in self.entities.values_mut() {
             if (slot.flags & 0x04) != 0 {
                 found = true;
-                // Prediction ON: simulate locally for immediate visual feedback.
-                // The server reconciles this in apply_component_update().
-                Self::simulate_slot_wrapped(slot, move_x, move_y, self.room_bounds);
-                // Prediction OFF: input is only recorded above and sent to the server.
-                // Position is updated exclusively by server transforms.
+                if self.prediction_enabled {
+                    // Prediction ON: simulate locally for immediate visual feedback.
+                    // The server reconciles this in apply_component_update().
+                    Self::simulate_slot_wrapped(slot, move_x, move_y, self.room_bounds);
+                }
+                // Prediction OFF: input is only sent to the server.
+                // Position is updated exclusively by server transforms when they arrive.
             }
         }
         found
