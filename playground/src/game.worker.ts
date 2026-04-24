@@ -367,7 +367,9 @@ self.onmessage = async (e) => {
 
             // Reset manifest cache to ensure the new UI instance receives it
             lastLoggedManifestWorker = '';
-            pollMetricsOnce(true).catch(e => console.error('[GameWorker] Initial manifest poll failed:', e));
+            // Start the metrics poll loop (M10105 / M10115)
+            if (metricsIntervalId) clearTimeout(metricsIntervalId as number);
+            pollMetrics(true).catch(e => console.error('[GameWorker] Metrics poll loop failed:', e));
         } catch (err) {
             console.error('[GameWorker] Connection failed:', err);
             self.postMessage({ type: 'connection_error', payload: { reason: (err as any).toString(), retriable: true } });
