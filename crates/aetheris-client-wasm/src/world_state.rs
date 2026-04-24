@@ -83,7 +83,16 @@ impl ClientWorld {
             input_history: VecDeque::with_capacity(120), // 2 seconds at 60Hz
             last_reconciled_tick: 0,
             prediction_enabled,
-            room_bounds: None,
+            room_bounds: if prediction_enabled {
+                Some(aetheris_protocol::types::RoomBounds {
+                    min_x: -250.0,
+                    min_y: -250.0,
+                    max_x: 250.0,
+                    max_y: 250.0,
+                })
+            } else {
+                None
+            },
         }
     }
 }
@@ -307,8 +316,30 @@ impl ClientWorld {
                             // NOTE: Toroidal wrapping must be applied during replay to match server state exactly.
                             // If prediction is re-enabled in the playground, verify that DT and wrap thresholds
                             // are perfectly synchronized to avoid cumulative drift 'snaps'.
-                            entry.x = transform.x;
-                            entry.y = transform.y;
+                            let mut authoritative_x = transform.x;
+                            let mut authoritative_y = transform.y;
+
+                            // M1038: Wrap-aware snap. If the server says we are on the other side,
+                            // but we are close to the boundary, we must ensure the 'snap' distance is minimal.
+                            if let Some(bounds) = self.room_bounds {
+                                let width = bounds.max_x - bounds.min_x;
+                                let height = bounds.max_y - bounds.min_y;
+                                if width > 0.0 {
+                                    let dx = authoritative_x - entry.x;
+                                    if dx.abs() > width * 0.5 {
+                                        if dx > 0.0 { authoritative_x -= width; } else { authoritative_x += width; }
+                                    }
+                                }
+                                if height > 0.0 {
+                                    let dy = authoritative_y - entry.y;
+                                    if dy.abs() > height * 0.5 {
+                                        if dy > 0.0 { authoritative_y -= height; } else { authoritative_y += height; }
+                                    }
+                                }
+                            }
+
+                            entry.x = authoritative_x;
+                            entry.y = authoritative_y;
                             entry.z = transform.z;
                             entry.rotation = transform.rotation;
 

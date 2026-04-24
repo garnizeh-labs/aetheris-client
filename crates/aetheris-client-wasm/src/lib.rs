@@ -1577,7 +1577,12 @@ mod wasm_impl {
         if size <= 0.0 {
             return a + (b - a) * alpha;
         }
-        let mut diff = b - a;
+
+        // Ensure inputs are within [min, max) before calculating diff
+        let a_norm = (a - min).rem_euclid(size) + min;
+        let b_norm = (b - min).rem_euclid(size) + min;
+
+        let mut diff = b_norm - a_norm;
         if diff.abs() > size * 0.5 {
             if diff > 0.0 {
                 diff -= size;
@@ -1585,8 +1590,8 @@ mod wasm_impl {
                 diff += size;
             }
         }
-        let res = a + diff * alpha;
-        // Keep it in [min, max)
+        let res = a_norm + diff * alpha;
+        // Final wrap to keep result strictly in [min, max)
         (res - min).rem_euclid(size) + min
     }
 

@@ -4,6 +4,8 @@
 struct CameraUniform {
     view_proj: mat4x4<f32>,
     world_size: vec4<f32>, // [width, height, min_x, min_y]
+    camera_pos: vec2<f32>,
+    _padding: vec2<f32>,
 };
 
 @group(0) @binding(0)
@@ -45,9 +47,8 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
     let BRIGHTNESS_VAR: f32  = 0.3;
     let MARGIN: f32          = 5.0; // Empty margin at world edges
 
-    // 1. Identify camera center in world space (approximate)
-    // view_proj[3] is the translation part. For ortho, it's -camera_pos
-    let camera_pos = -vec2<f32>(camera.view_proj[3][0], camera.view_proj[3][1]) * 20.0; // Calibration factor for playground zoom
+    // 1. Get explicit camera center in world space
+    let camera_pos = camera.camera_pos;
     
     // 2. Seamless Tiling logic
     // The background must wrap with the same period as the world to be seamless.
@@ -55,7 +56,7 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
     let world_height = camera.world_size.y;
     let period = vec2<f32>(world_width, world_height) * PARALLAX_SCALE;
     
-    var uv = (in.uv * UV_SCALE) - (camera_pos * PARALLAX_SCALE);
+    var uv = (in.uv * UV_SCALE) + (camera_pos * PARALLAX_SCALE);
     
     // Wrap UVs within the period to make it seamless
     if (period.x > 0.0 && period.y > 0.0) {

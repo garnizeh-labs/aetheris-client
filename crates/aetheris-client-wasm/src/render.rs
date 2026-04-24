@@ -212,6 +212,8 @@ impl DebugDrawable for SabSlot {
 struct CameraUniform {
     view_proj: [f32; 16],
     world_size: [f32; 4], // [width, height, min_x, min_y]
+    camera_pos: [f32; 2],
+    _padding: [f32; 2],
 }
 
 #[repr(C)]
@@ -918,6 +920,8 @@ impl RenderState {
         let camera_uniform = CameraUniform {
             view_proj: (projection * look_at).to_cols_array(),
             world_size: [world_width, world_height, self.room_bounds.0, self.room_bounds.1],
+            camera_pos: [self.camera_current.x, self.camera_current.y],
+            _padding: [0.0, 0.0],
         };
         self.queue.write_buffer(
             &self.camera_buffer,
