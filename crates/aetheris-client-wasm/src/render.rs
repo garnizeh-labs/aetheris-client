@@ -211,6 +211,7 @@ impl DebugDrawable for SabSlot {
 #[derive(Copy, Clone, Debug, Pod, Zeroable)]
 struct CameraUniform {
     view_proj: [f32; 16],
+    world_size: [f32; 4], // [width, height, min_x, min_y]
 }
 
 #[repr(C)]
@@ -873,6 +874,31 @@ impl RenderState {
 
         // Smooth camera follow (lerp)
         let lerp_factor = 0.3;
+
+        // Wrap-aware camera "jump" (M1038)
+        // If the player jumps across the world boundary (toroidal), the camera should snap
+        // to the other side to avoid the "time lapse" high-speed sweep effect.
+        let world_width = self.room_bounds.2 - self.room_bounds.0;
+        let world_height = self.room_bounds.3 - self.room_bounds.1;
+        if world_width > 0.0 && world_height > 0.0 {
+            let dx = self.camera_target.x - self.camera_current.x;
+            if dx.abs() > world_width * 0.5 {
+                if dx > 0.0 {
+                    self.camera_current.x += world_width;
+                } else {
+                    self.camera_current.x -= world_width;
+                }
+            }
+            let dy = self.camera_target.y - self.camera_current.y;
+            if dy.abs() > world_height * 0.5 {
+                if dy > 0.0 {
+                    self.camera_current.y += world_height;
+                } else {
+                    self.camera_current.y -= world_height;
+                }
+            }
+        }
+
         self.camera_current = self.camera_current.lerp(self.camera_target, lerp_factor);
 
         // 2. Update Camera Uniform
@@ -886,8 +912,12 @@ impl RenderState {
             Vec3::Y,                                         // Up is Y
         );
 
+        let world_width = self.room_bounds.2 - self.room_bounds.0;
+        let world_height = self.room_bounds.3 - self.room_bounds.1;
+
         let camera_uniform = CameraUniform {
             view_proj: (projection * look_at).to_cols_array(),
+            world_size: [world_width, world_height, self.room_bounds.0, self.room_bounds.1],
         };
         self.queue.write_buffer(
             &self.camera_buffer,
@@ -934,21 +964,70 @@ impl RenderState {
 
             // Batch entities by type for instanced drawing
             let mut type_batches: HashMap<u16, Vec<ObjectInstance>> = HashMap::new();
+            let now = (crate::performance_now() * 0.001) as f32; // Seconds (as f32 for GPU math)
+
             for ent in &sorted_entities {
                 if let Some(primitive) = self.primitives.get(&ent.entity_type) {
-                    // Use X and Y for screen coordinates (Z in entities is used for layer sorting)
-                    let model_matrix = Mat4::from_translation(Vec3::new(ent.x, ent.y, 0.0))
-                        * Mat4::from_rotation_z(ent.rotation);
+                    let is_player = (ent.flags & 0x04) != 0;
+                    let speed = (ent.dx * ent.dx + ent.dy * ent.dy).sqrt();
 
-                    let instance = ObjectInstance {
-                        model_matrix: model_matrix.to_cols_array(),
-                        color: primitive.color,
-                    };
+                    // Speed Effects (Shake & Blur)
+                    // Start effect at 80% of DEFAULT_MAX_VELOCITY (100.0)
+                    let speed_ratio = ((speed - 80.0) / 20.0).clamp(0.0, 1.0);
 
-                    type_batches
-                        .entry(ent.entity_type)
-                        .or_default()
-                        .push(instance);
+                    if is_player && speed_ratio > 0.0 {
+                        // 1. Smooth Shake (Tremida suave)
+                        let shake_freq = 60.0;
+                        let shake_amp = 0.05 * speed_ratio;
+                        let shake_x = (now * shake_freq).sin() * shake_amp;
+                        let shake_y = (now * shake_freq * 1.1).cos() * shake_amp;
+
+                        // 2. Trail Blur (After-images)
+                        // We draw 2 faint trails behind the ship along its negative velocity vector.
+                        for i in 1..=2 {
+                            let trail_offset = -Vec3::new(ent.dx, ent.dy, 0.0) * (0.01 * i as f32);
+                            let trail_alpha = 0.4 / (i as f32);
+                            let mut trail_color = primitive.color;
+                            trail_color[3] *= trail_alpha * speed_ratio;
+
+                            let trail_matrix = Mat4::from_translation(
+                                Vec3::new(ent.x, ent.y, 0.0) + trail_offset,
+                            ) * Mat4::from_rotation_z(ent.rotation);
+
+                            type_batches
+                                .entry(ent.entity_type)
+                                .or_default()
+                                .push(ObjectInstance {
+                                    model_matrix: trail_matrix.to_cols_array(),
+                                    color: trail_color,
+                                });
+                        }
+
+                        // Apply shake to the main instance
+                        let model_matrix = Mat4::from_translation(
+                            Vec3::new(ent.x + shake_x, ent.y + shake_y, 0.0),
+                        ) * Mat4::from_rotation_z(ent.rotation);
+
+                        type_batches
+                            .entry(ent.entity_type)
+                            .or_default()
+                            .push(ObjectInstance {
+                                model_matrix: model_matrix.to_cols_array(),
+                                color: primitive.color,
+                            });
+                    } else {
+                        // Normal drawing
+                        let model_matrix = Mat4::from_translation(Vec3::new(ent.x, ent.y, 0.0))
+                            * Mat4::from_rotation_z(ent.rotation);
+
+                        type_batches
+                            .entry(ent.entity_type)
+                            .or_default()
+                            .push(ObjectInstance {
+                                model_matrix: model_matrix.to_cols_array(),
+                                color: primitive.color,
+                            });
+                    }
                 }
             }
 

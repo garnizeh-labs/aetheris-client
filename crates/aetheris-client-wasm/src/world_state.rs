@@ -49,6 +49,9 @@ pub struct ClientWorld {
     /// When `false`, the client is pure server-authority: position is only updated from
     /// server transforms and no local simulation is performed for the local player.
     pub prediction_enabled: bool,
+    /// Authoritative world boundaries received from the server.
+    /// Used for toroidal wrapping in Sandbox mode.
+    pub room_bounds: Option<aetheris_protocol::types::RoomBounds>,
 }
 
 impl Default for ClientWorld {
@@ -80,6 +83,7 @@ impl ClientWorld {
             input_history: VecDeque::with_capacity(120), // 2 seconds at 60Hz
             last_reconciled_tick: 0,
             prediction_enabled,
+            room_bounds: None,
         }
     }
 }
@@ -174,6 +178,18 @@ impl WorldState for ClientWorld {
             slot.dy *= drag_factor;
             slot.x += slot.dx * DT;
             slot.y += slot.dy * DT;
+
+            // Toroidal wrapping (Sandbox/Prediction)
+            if let Some(bounds) = self.room_bounds {
+                let width = bounds.max_x - bounds.min_x;
+                let height = bounds.max_y - bounds.min_y;
+                if width > 0.0 {
+                    slot.x = ((slot.x - bounds.min_x).rem_euclid(width)) + bounds.min_x;
+                }
+                if height > 0.0 {
+                    slot.y = ((slot.y - bounds.min_y).rem_euclid(height)) + bounds.min_y;
+                }
+            }
         }
     }
 
@@ -288,15 +304,22 @@ impl ClientWorld {
                         if (entry.flags & 0x04) != 0 && self.prediction_enabled {
                             // M1020: Client-Side Prediction + Reconciliation
                             // Snap to server state, then replay unacknowledged inputs on top.
+                            // NOTE: Toroidal wrapping must be applied during replay to match server state exactly.
+                            // If prediction is re-enabled in the playground, verify that DT and wrap thresholds
+                            // are perfectly synchronized to avoid cumulative drift 'snaps'.
                             entry.x = transform.x;
                             entry.y = transform.y;
                             entry.z = transform.z;
                             entry.rotation = transform.rotation;
 
                             let server_tick = update.tick;
-                            for record in self.input_history.iter().filter(|r| r.tick > server_tick)
-                            {
-                                Self::simulate_slot(entry, record.move_x, record.move_y);
+                            for record in self.input_history.iter().filter(|r| r.tick > server_tick) {
+                                Self::simulate_slot_wrapped(
+                                    entry,
+                                    record.move_x,
+                                    record.move_y,
+                                    self.room_bounds,
+                                );
                             }
                             while self
                                 .input_history
@@ -306,7 +329,7 @@ impl ClientWorld {
                                 self.input_history.pop_front();
                             }
                         } else {
-                            // Server-authority mode (prediction OFF) or non-local-player entity:
+                            // Server-authority mode:
                             // accept server position directly, no replay.
                             entry.x = transform.x;
                             entry.y = transform.y;
@@ -429,6 +452,7 @@ impl ClientWorld {
                     let mut sw =
                         unsafe { crate::shared_world::SharedWorld::from_ptr(ptr_val as *mut u8) };
                     sw.set_room_bounds(bounds.min_x, bounds.min_y, bounds.max_x, bounds.max_y);
+                    self.room_bounds = Some(bounds);
                 }
             }
             kind => {
@@ -502,6 +526,25 @@ impl ClientWorld {
         slot.z += slot.dz * DT;
     }
 
+    /// Internal simulation step with toroidal wrapping.
+    ///
+    /// NOTE: If prediction is enabled, wrapping must be consistent with the server
+    /// to avoid reconciliation snaps. Prediction is currently disabled in the playground.
+    fn simulate_slot_wrapped(slot: &mut SabSlot, move_x: f32, move_y: f32, bounds: Option<aetheris_protocol::types::RoomBounds>) {
+        Self::simulate_slot(slot, move_x, move_y);
+
+        if let Some(bounds) = bounds {
+            let width = bounds.max_x - bounds.min_x;
+            let height = bounds.max_y - bounds.min_y;
+            if width > 0.0 {
+                slot.x = ((slot.x - bounds.min_x).rem_euclid(width)) + bounds.min_x;
+            }
+            if height > 0.0 {
+                slot.y = ((slot.y - bounds.min_y).rem_euclid(height)) + bounds.min_y;
+            }
+        }
+    }
+
     /// Applies playground input to the local player entity.
     /// Used for Sandbox mode simulation.
     pub fn playground_apply_input(&mut self, move_x: f32, move_y: f32, actions_mask: u32) -> bool {
@@ -525,11 +568,9 @@ impl ClientWorld {
         for slot in self.entities.values_mut() {
             if (slot.flags & 0x04) != 0 {
                 found = true;
-                if self.prediction_enabled {
-                    // Prediction ON: simulate locally for immediate visual feedback.
-                    // The server reconciles this in apply_component_update().
-                    Self::simulate_slot(slot, move_x, move_y);
-                }
+                // Prediction ON: simulate locally for immediate visual feedback.
+                // The server reconciles this in apply_component_update().
+                Self::simulate_slot_wrapped(slot, move_x, move_y, self.room_bounds);
                 // Prediction OFF: input is only recorded above and sent to the server.
                 // Position is updated exclusively by server transforms.
             }

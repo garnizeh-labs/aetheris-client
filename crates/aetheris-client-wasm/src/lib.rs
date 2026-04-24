@@ -909,6 +909,8 @@ mod wasm_impl {
             const DT_MS: f64 = 1000.0 / 60.0;
             while self.tick_accumulator >= DT_MS {
                 // 1. Apply buffered playground input locally (Prediction)
+                // We keep this enabled in the playground to maintain responsiveness (M1020).
+                // Reconciliation jitter is now mitigated by wrap-aware interpolation.
                 let applied = self.world_state.playground_apply_input(
                     self.playground_move_x,
                     self.playground_move_y,
@@ -1533,8 +1535,13 @@ mod wasm_impl {
 
             for ent in &mut self.render_buffer {
                 if let Some(prev) = prev_map.get(&ent.network_id).copied() {
-                    ent.x = lerp(prev.x, ent.x, alpha);
-                    ent.y = lerp(prev.y, ent.y, alpha);
+                    if let Some(bounds) = &self.world_state.room_bounds {
+                        ent.x = lerp_wrapped(prev.x, ent.x, alpha, bounds.min_x, bounds.max_x);
+                        ent.y = lerp_wrapped(prev.y, ent.y, alpha, bounds.min_y, bounds.max_y);
+                    } else {
+                        ent.x = lerp(prev.x, ent.x, alpha);
+                        ent.y = lerp(prev.y, ent.y, alpha);
+                    }
                     ent.z = lerp(prev.z, ent.z, alpha);
                     ent.rotation = lerp_rotation(prev.rotation, ent.rotation, alpha);
                 }
@@ -1563,6 +1570,24 @@ mod wasm_impl {
 
     fn lerp(a: f32, b: f32, alpha: f32) -> f32 {
         a + (b - a) * alpha
+    }
+
+    fn lerp_wrapped(a: f32, b: f32, alpha: f32, min: f32, max: f32) -> f32 {
+        let size = max - min;
+        if size <= 0.0 {
+            return a + (b - a) * alpha;
+        }
+        let mut diff = b - a;
+        if diff.abs() > size * 0.5 {
+            if diff > 0.0 {
+                diff -= size;
+            } else {
+                diff += size;
+            }
+        }
+        let res = a + diff * alpha;
+        // Keep it in [min, max)
+        (res - min).rem_euclid(size) + min
     }
 
     fn lerp_rotation(a: f32, b: f32, alpha: f32) -> f32 {
