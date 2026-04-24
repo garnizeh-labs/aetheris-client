@@ -7,6 +7,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.19](https://github.com/garnizeh-labs/aetheris-client/compare/aetheris-client-wasm-v0.3.18...aetheris-client-wasm-v0.3.19) - 2026-04-24
+
+### Added
+
+- *(client)* stabilize ship movement and implement global camera shake
+- implement infinite toroidal world physics and seamless background in playground
+
+### Fixed
+
+- stabilize toroidal transitions, reconciliation and background parallax
+
+### Other
+
+- Merge pull request #41 from garnizeh-labs/vs-01-refinement
+- remove client-side prediction logic from entity component updates
+- vs-01 refinement - reduced log spam and documented prediction status
+
 ## [0.3.18](https://github.com/garnizeh-labs/aetheris-client/compare/aetheris-client-wasm-v0.3.16...aetheris-client-wasm-v0.3.18) - 2026-04-23
 
 ### Added
