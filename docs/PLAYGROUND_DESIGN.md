@@ -106,11 +106,12 @@ The Playground simulation is **Client-Authoritative** in Sandbox mode and **Serv
 Every `tick_playground()` call (Sandbox):
 
 1. Increments rotation of every entity if enabled.
-2. Advances the local tick counter so the Render Worker receives fresh snapshots.
-3. Commits the current world state to the `SharedWorld` pointer.
-4. The Render Worker picks up the change as usual.
+2. **Infinite World (Wrapping)**: Applies toroidal wrapping logic using `rem_euclid` based on the current `RoomBounds` (default 500x500). Entities crossing a boundary re-emerge on the opposite side.
+3. Advances the local tick counter so the Render Worker receives fresh snapshots.
+4. Commits the current world state to the `SharedWorld` pointer.
+5. The Render Worker picks up the change as usual.
 
-In Live mode, `tick()` processes incoming server replication events. The `ClearWorld` network event causes the server to despawn all entities and the client to clear its local entity map.
+In Live mode, `tick()` processes incoming server replication events, which also apply the authoritative toroidal wrapping logic. The `ClearWorld` network event causes the server to despawn all entities and the client to clear its local entity map.
 
 The tick loop uses `setTimeout` (not `setInterval`) for precise 60 Hz scheduling. A `pause_toggle` IPC message throttles both workers to a 500 ms sleep when the browser tab is hidden, preventing accumulated lag on resume.
 

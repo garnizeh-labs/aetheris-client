@@ -304,13 +304,7 @@ export class ShortcutRegistry {
             ],
             'Playground connected to Game Server. State is authoritative.'
         ));
-        helpContent.appendChild(makeSection(
-            [
-                { text: 'INFRA: NONE', color: 'var(--text-muted)', border: 'var(--border-subtle)', bg: mix('var(--text-muted)') },
-                { text: 'ENGINE: LOCAL SIM', color: 'var(--accent-primary)', border: 'var(--accent-primary)', bg: mix('var(--accent-primary)') },
-            ],
-            'Offline Sandbox Mode. Engine runs locally via WebAssembly without a server.'
-        ));
+
         helpContent.appendChild(makeSection(
             [
                 { text: 'INFRA: OFFLINE', color: 'var(--accent-danger)', border: 'var(--accent-danger)', bg: mix('var(--accent-danger)') },

@@ -10,7 +10,22 @@ use aetheris_protocol::traits::WorldState;
 use aetheris_protocol::types::{
     ClientId, ComponentKind, LocalId, NetworkId, ShipClass, ShipStats, Transform,
 };
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, VecDeque};
+
+#[derive(Clone, Copy, Debug)]
+pub struct InputRecord {
+    pub tick: u64,
+    pub move_x: f32,
+    pub move_y: f32,
+    pub actions_mask: u8,
+}
+
+#[derive(Debug, Clone, Copy, serde::Serialize, serde::Deserialize, Default)]
+pub struct Velocity {
+    pub dx: f32,
+    pub dy: f32,
+    pub dz: f32,
+}
 
 /// A simplified client-side world that tracks entity states using `SabSlot`.
 #[derive(Debug)]
@@ -25,6 +40,18 @@ pub struct ClientWorld {
     pub system_manifest: BTreeMap<String, String>,
     /// Optional shared world to push room bounds into directly (stored as usize for Send/Sync).
     pub shared_world_ref: Option<usize>,
+    /// History of inputs applied for Client-Side Prediction reconciliation.
+    pub input_history: VecDeque<InputRecord>,
+    /// The latest server tick that has been reconciled.
+    pub last_reconciled_tick: u64,
+    /// When `true`, the client simulates input locally and replays unacknowledged inputs
+    /// on top of server snapshots (client-side prediction + reconciliation).
+    /// When `false`, the client is pure server-authority: position is only updated from
+    /// server transforms and no local simulation is performed for the local player.
+    pub prediction_enabled: bool,
+    /// Authoritative world boundaries received from the server.
+    /// Used for toroidal wrapping in Sandbox mode.
+    pub room_bounds: Option<aetheris_protocol::types::RoomBounds>,
 }
 
 impl Default for ClientWorld {
@@ -35,14 +62,37 @@ impl Default for ClientWorld {
 
 impl ClientWorld {
     /// Creates a new, empty `ClientWorld`.
+    ///
+    /// `prediction_enabled` controls whether client-side prediction is active.
+    /// Pass `false` for pure server-authority mode (recommended during debugging).
+    /// Pass `true` to enable local simulation + reconciliation for responsive feel.
     #[must_use]
     pub fn new() -> Self {
+        Self::with_prediction(false)
+    }
+
+    /// Creates a `ClientWorld` with explicit prediction setting.
+    #[must_use]
+    pub fn with_prediction(prediction_enabled: bool) -> Self {
         Self {
             entities: BTreeMap::new(),
             player_network_id: None,
             latest_tick: 0,
             system_manifest: BTreeMap::new(),
             shared_world_ref: None,
+            input_history: VecDeque::with_capacity(120), // 2 seconds at 60Hz
+            last_reconciled_tick: 0,
+            prediction_enabled,
+            room_bounds: if prediction_enabled {
+                Some(aetheris_protocol::types::RoomBounds {
+                    min_x: -250.0,
+                    min_y: -250.0,
+                    max_x: 250.0,
+                    max_y: 250.0,
+                })
+            } else {
+                None
+            },
         }
     }
 }
@@ -78,7 +128,7 @@ impl WorldState for ClientWorld {
 
             // Ensure entity exists for component updates
             let entry = self.entities.entry(update.network_id).or_insert_with(|| {
-                tracing::info!(
+                tracing::trace!(
                     network_id = update.network_id.0,
                     kind = update.component_kind.0,
                     player_network_id = ?self.player_network_id,
@@ -107,14 +157,14 @@ impl WorldState for ClientWorld {
             // This handles cases where Possession arrived before the entity was spawned.
             let is_player = Some(update.network_id) == self.player_network_id;
             if is_player {
-                tracing::info!(
+                tracing::trace!(
                     network_id = update.network_id.0,
                     is_new,
                     "[apply_updates] Setting 0x04 (LocalPlayer) flag on entity"
                 );
                 entry.flags |= 0x04;
             } else if is_new {
-                tracing::info!(
+                tracing::trace!(
                     network_id = update.network_id.0,
                     player_network_id = ?self.player_network_id,
                     flags = entry.flags,
@@ -127,16 +177,28 @@ impl WorldState for ClientWorld {
     }
 
     fn simulate(&mut self) {
-        let dt = 0.05; // 20Hz
-        let drag_base = 0.05;
-        for slot in self.entities.values_mut() {
-            // In a simple velocity integration without input, we just move by DX/DY.
-            slot.x += slot.dx * dt;
-            slot.y += slot.dy * dt;
+        const DRAG: f32 = 1.0;
+        const DT: f32 = 1.0 / 60.0;
+        let drag_factor = 1.0 / (1.0 + DRAG * DT);
 
-            // Apply Drag (Local approximation)
-            slot.dx *= 1.0 - (drag_base * dt);
-            slot.dy *= 1.0 - (drag_base * dt);
+        for slot in self.entities.values_mut() {
+            // Semi-implicit Euler integration
+            slot.dx *= drag_factor;
+            slot.dy *= drag_factor;
+            slot.x += slot.dx * DT;
+            slot.y += slot.dy * DT;
+
+            // Toroidal wrapping (Sandbox/Prediction)
+            if let Some(bounds) = self.room_bounds {
+                let width = bounds.max_x - bounds.min_x;
+                let height = bounds.max_y - bounds.min_y;
+                if width > 0.0 {
+                    slot.x = ((slot.x - bounds.min_x).rem_euclid(width)) + bounds.min_x;
+                }
+                if height > 0.0 {
+                    slot.y = ((slot.y - bounds.min_y).rem_euclid(height)) + bounds.min_y;
+                }
+            }
         }
     }
 
@@ -212,7 +274,7 @@ impl ClientWorld {
                 ?prev,
                 entity_exists = self.entities.contains_key(network_id),
                 total_entities = self.entities.len(),
-                "[handle_game_event] POSSESSION received"
+                "[handle_game_event] POSSESSION received — updating player_network_id"
             );
             // Clear the local-player flag from the previous entity if it differs.
             if let Some(slot) = prev
@@ -245,106 +307,20 @@ impl ClientWorld {
 
     fn apply_component_update(&mut self, update: &ComponentUpdate) {
         match update.component_kind {
-            // ComponentKind(1) == Transform (Spatial data)
-            ComponentKind(1) => match rmp_serde::from_slice::<Transform>(&update.payload) {
-                Ok(transform) => {
-                    if let Some(entry) = self.entities.get_mut(&update.network_id) {
-                        entry.x = transform.x;
-                        entry.y = transform.y;
-                        entry.z = transform.z;
-                        entry.rotation = transform.rotation;
-                        if transform.entity_type != 0 {
-                            entry.entity_type = transform.entity_type;
-                        }
-                    }
-                }
-                Err(e) => {
-                    tracing::warn!(network_id = update.network_id.0, error = ?e, "Failed to decode Transform");
-                }
-            },
-            // ComponentKind(5) == ShipClass (Drives rendering type)
-            ComponentKind(5) => match rmp_serde::from_slice::<ShipClass>(&update.payload) {
-                Ok(ship_class) => {
-                    if let Some(entry) = self.entities.get_mut(&update.network_id) {
-                        entry.entity_type = match ship_class {
-                            ShipClass::Interceptor => 1,
-                            ShipClass::Dreadnought => 3,
-                            ShipClass::Hauler => 4,
-                        };
-                    }
-                }
-                Err(e) => {
-                    tracing::warn!(network_id = update.network_id.0, error = ?e, "Failed to decode ShipClass");
-                }
-            },
-            // ComponentKind(3) == ShipStats (HP/Shield)
-            ComponentKind(3) => match rmp_serde::from_slice::<ShipStats>(&update.payload) {
-                Ok(stats) => {
-                    if let Some(entry) = self.entities.get_mut(&update.network_id) {
-                        entry.hp = stats.hp;
-                        entry.shield = stats.shield;
-                    }
-                }
-                Err(e) => {
-                    tracing::warn!(network_id = update.network_id.0, error = ?e, "Failed to decode ShipStats");
-                }
-            },
-            // ComponentKind(1024) == MiningBeam
-            aetheris_protocol::types::MINING_BEAM_KIND => {
-                use aetheris_protocol::types::MiningBeam;
-                match rmp_serde::from_slice::<MiningBeam>(&update.payload) {
-                    Ok(beam) => {
-                        if let Some(entry) = self.entities.get_mut(&update.network_id) {
-                            entry.mining_active = u8::from(beam.active);
-                            #[allow(clippy::cast_possible_truncation)]
-                            {
-                                entry.mining_target_id = beam.target.map_or(0, |id| id.0 as u16);
-                            }
-                        }
-                    }
-                    Err(e) => {
-                        tracing::warn!(network_id = update.network_id.0, error = ?e, "Failed to decode MiningBeam");
-                    }
-                }
-            }
-            // ComponentKind(1025) == CargoHold
-            aetheris_protocol::types::CARGO_HOLD_KIND => {
-                use aetheris_protocol::types::CargoHold;
-                match rmp_serde::from_slice::<CargoHold>(&update.payload) {
-                    Ok(cargo) => {
-                        if let Some(entry) = self.entities.get_mut(&update.network_id) {
-                            entry.cargo_ore = cargo.ore_count;
-                            // High-assurance possession: CargoHold is only replicated to owners.
-                            // Flagging this entity as the player for camera tracking and local input handling.
-                            entry.flags |= 0x04;
-                        }
-                    }
-                    Err(e) => {
-                        tracing::warn!(network_id = update.network_id.0, error = ?e, "Failed to decode CargoHold");
-                    }
-                }
-            }
-            // ComponentKind(1026) == Asteroid
+            ComponentKind(1) => self.handle_transform_update(update),
+            ComponentKind(2) => self.handle_velocity_update(update),
+            ComponentKind(5) => self.handle_ship_class_update(update),
+            ComponentKind(3) => self.handle_ship_stats_update(update),
+            aetheris_protocol::types::MINING_BEAM_KIND => self.handle_mining_beam_update(update),
+            aetheris_protocol::types::CARGO_HOLD_KIND => self.handle_cargo_hold_update(update),
             aetheris_protocol::types::ASTEROID_KIND => {
-                if let Some(entry) = self.entities.get_mut(&update.network_id) {
-                    // Mark as Asteroid type (5) if not already set
-                    if entry.entity_type == 0 {
-                        entry.entity_type = 5;
-                    }
+                if let Some(entry) = self.entities.get_mut(&update.network_id)
+                    && entry.entity_type == 0
+                {
+                    entry.entity_type = 5;
                 }
             }
-            // ComponentKind(130) == RoomBounds
-            aetheris_protocol::types::ROOM_BOUNDS_KIND => {
-                use aetheris_protocol::types::RoomBounds;
-                if let (Ok(bounds), Some(ptr_val)) = (
-                    rmp_serde::from_slice::<RoomBounds>(&update.payload),
-                    self.shared_world_ref,
-                ) {
-                    let mut sw =
-                        unsafe { crate::shared_world::SharedWorld::from_ptr(ptr_val as *mut u8) };
-                    sw.set_room_bounds(bounds.min_x, bounds.min_y, bounds.max_x, bounds.max_y);
-                }
-            }
+            aetheris_protocol::types::ROOM_BOUNDS_KIND => self.handle_room_bounds_update(update),
             kind => {
                 tracing::debug!(
                     network_id = update.network_id.0,
@@ -354,45 +330,298 @@ impl ClientWorld {
             }
         }
     }
+
+    fn handle_transform_update(&mut self, update: &ComponentUpdate) {
+        match rmp_serde::from_slice::<Transform>(&update.payload) {
+            Ok(transform) => {
+                if let Some(entry) = self.entities.get_mut(&update.network_id) {
+                    if (entry.flags & 0x04) != 0 && self.prediction_enabled {
+                        // M1020: Client-Side Prediction + Reconciliation
+                        let mut authoritative_x = transform.x;
+                        let mut authoritative_y = transform.y;
+
+                        // M1038: Wrap-aware snap
+                        if let Some(bounds) = self.room_bounds {
+                            let width = bounds.max_x - bounds.min_x;
+                            let height = bounds.max_y - bounds.min_y;
+                            if width > 0.0 {
+                                let dx = authoritative_x - entry.x;
+                                if dx.abs() > width * 0.5 {
+                                    if dx > 0.0 {
+                                        authoritative_x -= width;
+                                    } else {
+                                        authoritative_x += width;
+                                    }
+                                }
+                            }
+                            if height > 0.0 {
+                                let dy = authoritative_y - entry.y;
+                                if dy.abs() > height * 0.5 {
+                                    if dy > 0.0 {
+                                        authoritative_y -= height;
+                                    } else {
+                                        authoritative_y += height;
+                                    }
+                                }
+                            }
+                        }
+
+                        entry.x = authoritative_x;
+                        entry.y = authoritative_y;
+                        entry.z = transform.z;
+                        entry.rotation = transform.rotation;
+
+                        let server_tick = update.tick;
+                        for record in self.input_history.iter().filter(|r| r.tick > server_tick) {
+                            Self::simulate_slot_wrapped(
+                                entry,
+                                record.move_x,
+                                record.move_y,
+                                self.room_bounds,
+                            );
+                        }
+                        while self
+                            .input_history
+                            .front()
+                            .is_some_and(|r| r.tick <= server_tick)
+                        {
+                            self.input_history.pop_front();
+                        }
+                    } else {
+                        // Server-authority mode
+                        entry.x = transform.x;
+                        entry.y = transform.y;
+                        entry.z = transform.z;
+                        entry.rotation = transform.rotation;
+                        self.input_history.clear();
+                    }
+
+                    if transform.entity_type != 0 {
+                        entry.entity_type = transform.entity_type;
+                    }
+                }
+            }
+            Err(e) => {
+                tracing::warn!(network_id = update.network_id.0, error = ?e, "Failed to decode Transform");
+            }
+        }
+    }
+
+    fn handle_velocity_update(&mut self, update: &ComponentUpdate) {
+        match rmp_serde::from_slice::<Velocity>(&update.payload) {
+            Ok(velocity) => {
+                if let Some(entry) = self.entities.get_mut(&update.network_id) {
+                    entry.dx = velocity.dx;
+                    entry.dy = velocity.dy;
+                    entry.dz = velocity.dz;
+                }
+            }
+            Err(e) => {
+                tracing::warn!(network_id = update.network_id.0, error = ?e, "Failed to decode Velocity");
+            }
+        }
+    }
+
+    fn handle_ship_class_update(&mut self, update: &ComponentUpdate) {
+        match rmp_serde::from_slice::<ShipClass>(&update.payload) {
+            Ok(ship_class) => {
+                if let Some(entry) = self.entities.get_mut(&update.network_id) {
+                    entry.entity_type = match ship_class {
+                        ShipClass::Interceptor => 1,
+                        ShipClass::Dreadnought => 3,
+                        ShipClass::Hauler => 4,
+                    };
+                }
+            }
+            Err(e) => {
+                tracing::warn!(network_id = update.network_id.0, error = ?e, "Failed to decode ShipClass");
+            }
+        }
+    }
+
+    fn handle_ship_stats_update(&mut self, update: &ComponentUpdate) {
+        match rmp_serde::from_slice::<ShipStats>(&update.payload) {
+            Ok(stats) => {
+                if let Some(entry) = self.entities.get_mut(&update.network_id) {
+                    entry.hp = stats.hp;
+                    entry.shield = stats.shield;
+                }
+            }
+            Err(e) => {
+                tracing::warn!(network_id = update.network_id.0, error = ?e, "Failed to decode ShipStats");
+            }
+        }
+    }
+
+    fn handle_mining_beam_update(&mut self, update: &ComponentUpdate) {
+        use aetheris_protocol::types::MiningBeam;
+        match rmp_serde::from_slice::<MiningBeam>(&update.payload) {
+            Ok(beam) => {
+                if let Some(entry) = self.entities.get_mut(&update.network_id) {
+                    entry.mining_active = u8::from(beam.active);
+                    #[allow(clippy::cast_possible_truncation)]
+                    {
+                        entry.mining_target_id = beam.target.map_or(0, |id| id.0 as u16);
+                    }
+                }
+            }
+            Err(e) => {
+                tracing::warn!(network_id = update.network_id.0, error = ?e, "Failed to decode MiningBeam");
+            }
+        }
+    }
+
+    fn handle_cargo_hold_update(&mut self, update: &ComponentUpdate) {
+        use aetheris_protocol::types::CargoHold;
+        match rmp_serde::from_slice::<CargoHold>(&update.payload) {
+            Ok(cargo) => {
+                if let Some(entry) = self.entities.get_mut(&update.network_id) {
+                    entry.cargo_ore = cargo.ore_count;
+                    entry.flags |= 0x04;
+                }
+            }
+            Err(e) => {
+                tracing::warn!(network_id = update.network_id.0, error = ?e, "Failed to decode CargoHold");
+            }
+        }
+    }
+
+    fn handle_room_bounds_update(&mut self, update: &ComponentUpdate) {
+        use aetheris_protocol::types::RoomBounds;
+        if let (Ok(bounds), Some(ptr_val)) = (
+            rmp_serde::from_slice::<RoomBounds>(&update.payload),
+            self.shared_world_ref,
+        ) {
+            let mut sw = unsafe { crate::shared_world::SharedWorld::from_ptr(ptr_val as *mut u8) };
+            sw.set_room_bounds(bounds.min_x, bounds.min_y, bounds.max_x, bounds.max_y);
+            self.room_bounds = Some(bounds);
+        }
+    }
 }
 
 impl ClientWorld {
+    /// Internal simulation step used for prediction and reconciliation.
+    fn simulate_slot(slot: &mut SabSlot, move_x: f32, move_y: f32) {
+        const THRUST_FORCE: f32 = 8000.0;
+        const BASE_MASS: f32 = 100.0;
+        const MASS_PER_ORE: f32 = 2.0;
+        const DRAG: f32 = 2.0;
+        const MAX_SPEED: f32 = 75.0;
+        const DT: f32 = 1.0 / 60.0;
+
+        // 1.0. Calculate total mass (M1038 Cargo Penalty)
+        let total_mass = BASE_MASS + (f32::from(slot.cargo_ore) * MASS_PER_ORE);
+
+        // 1. Resolve move vector (Normalizing diagonal)
+        let mut mx = move_x;
+        let mut my = move_y;
+        let input_len_sq = mx * mx + my * my;
+        if input_len_sq > 1.0 {
+            let input_len = input_len_sq.sqrt();
+            mx /= input_len;
+            my /= input_len;
+        }
+
+        // 2. Apply thrust acceleration
+        let accel_x = mx * (THRUST_FORCE / total_mass);
+        let accel_y = my * (THRUST_FORCE / total_mass);
+
+        slot.dx += accel_x * DT;
+        slot.dy += accel_y * DT;
+
+        // 3. Apply Drag (Stable semi-implicit model)
+        let drag_factor = 1.0 / (1.0 + DRAG * DT);
+        slot.dx *= drag_factor;
+        slot.dy *= drag_factor;
+
+        // 4. Clamp speed
+        let speed_sq = slot.dx * slot.dx + slot.dy * slot.dy;
+        if speed_sq > MAX_SPEED * MAX_SPEED {
+            let speed = speed_sq.sqrt();
+            slot.dx = (slot.dx / speed) * MAX_SPEED;
+            slot.dy = (slot.dy / speed) * MAX_SPEED;
+        }
+
+        // 5. Update rotation (Smoothing)
+        if speed_sq > 0.01 {
+            const TURN_RATE: f32 = 5.0;
+            let target_rot = slot.dy.atan2(slot.dx);
+            let current_rot = slot.rotation;
+            let diff = (target_rot - current_rot + std::f32::consts::PI)
+                .rem_euclid(std::f32::consts::TAU)
+                - std::f32::consts::PI;
+
+            if diff.abs() > 0.001 {
+                slot.rotation += diff.clamp(-TURN_RATE * DT, TURN_RATE * DT);
+            } else {
+                slot.rotation = target_rot;
+            }
+        }
+
+        // 6. Integrate position
+        slot.x += slot.dx * DT;
+        slot.y += slot.dy * DT;
+        slot.z += slot.dz * DT;
+    }
+
+    /// Internal simulation step with toroidal wrapping.
+    ///
+    /// NOTE: If prediction is enabled, wrapping must be consistent with the server
+    /// to avoid reconciliation snaps. Prediction is currently disabled in the playground.
+    fn simulate_slot_wrapped(
+        slot: &mut SabSlot,
+        move_x: f32,
+        move_y: f32,
+        bounds: Option<aetheris_protocol::types::RoomBounds>,
+    ) {
+        Self::simulate_slot(slot, move_x, move_y);
+
+        if let Some(bounds) = bounds {
+            let width = bounds.max_x - bounds.min_x;
+            let height = bounds.max_y - bounds.min_y;
+            if width > 0.0 {
+                slot.x = ((slot.x - bounds.min_x).rem_euclid(width)) + bounds.min_x;
+            }
+            if height > 0.0 {
+                slot.y = ((slot.y - bounds.min_y).rem_euclid(height)) + bounds.min_y;
+            }
+        }
+    }
+
     /// Applies playground input to the local player entity.
     /// Used for Sandbox mode simulation.
-    pub fn playground_apply_input(&mut self, move_x: f32, move_y: f32, actions_mask: u32) {
-        // Physics constants from VS-01
-        const THRUST_ACCEL: f32 = 0.12;
-        const DRAG: f32 = 0.92;
-        const MAX_SPEED: f32 = 3.0;
+    pub fn playground_apply_input(&mut self, move_x: f32, move_y: f32, actions_mask: u32) -> bool {
+        if self.prediction_enabled {
+            // Record input for reconciliation history only when prediction is active.
+            self.input_history.push_back(InputRecord {
+                tick: self.latest_tick,
+                move_x,
+                move_y,
+                #[allow(clippy::cast_possible_truncation)]
+                actions_mask: actions_mask as u8,
+            });
 
+            // Limit history size to 5 seconds (300 ticks)
+            if self.input_history.len() > 300 {
+                self.input_history.pop_front();
+            }
+        }
+
+        let mut found = false;
         // Locate local player entity (flag 0x04) in the world state
         for slot in self.entities.values_mut() {
             if (slot.flags & 0x04) != 0 {
-                // Apply thrust
-                slot.dx = (slot.dx + move_x * THRUST_ACCEL) * DRAG;
-                slot.dy = (slot.dy + move_y * THRUST_ACCEL) * DRAG;
-
-                // Clamp speed
-                let speed_sq = slot.dx * slot.dx + slot.dy * slot.dy;
-                if speed_sq > MAX_SPEED * MAX_SPEED {
-                    let speed = speed_sq.sqrt();
-                    slot.dx = (slot.dx / speed) * MAX_SPEED;
-                    slot.dy = (slot.dy / speed) * MAX_SPEED;
+                found = true;
+                if self.prediction_enabled {
+                    // Prediction ON: simulate locally for immediate visual feedback.
+                    // The server reconciles this in apply_component_update().
+                    Self::simulate_slot_wrapped(slot, move_x, move_y, self.room_bounds);
                 }
-
-                // Integrate position
-                slot.x += slot.dx;
-                slot.y += slot.dy;
-
-                // Reset mining state if ToggleMining action is triggered in sandbox
-                if (actions_mask & 0x02) != 0 {
-                    slot.mining_active = 0;
-                    slot.mining_target_id = 0;
-                }
-
-                break;
+                // Prediction OFF: input is only sent to the server.
+                // Position is updated exclusively by server transforms when they arrive.
             }
         }
+        found
     }
 }
 
@@ -405,7 +634,7 @@ mod tests {
 
     #[test]
     fn test_playground_movement() {
-        let mut world = ClientWorld::new();
+        let mut world = ClientWorld::with_prediction(true);
 
         // Spawn a local player ship (flag 0x04)
         world.entities.insert(
@@ -423,13 +652,14 @@ mod tests {
         let player = world.entities.get(&NetworkId(1)).unwrap();
         assert!(player.dx > 0.0);
         assert!(player.x > 0.0);
-        // dx = (0 + 1 * 0.12) * 0.92 = 0.1104
-        assert!((player.dx - 0.1104).abs() < 0.0001);
+        // accel = 80, DT = 1/60, drag_factor = 1 / (1 + 2.0/60) = 60/62 ≈ 0.9677
+        // dx = (0 + 80 * 1/60) * 0.9677 = 1.2903225
+        assert!((player.dx - 1.2903225).abs() < 0.0001);
     }
 
     #[test]
     fn test_playground_speed_clamp() {
-        let mut world = ClientWorld::new();
+        let mut world = ClientWorld::with_prediction(true);
         world.entities.insert(
             NetworkId(1),
             SabSlot {
@@ -446,12 +676,12 @@ mod tests {
 
         let player = world.entities.get(&NetworkId(1)).unwrap();
         let speed = (player.dx * player.dx + player.dy * player.dy).sqrt();
-        assert!(speed <= 3.0 + 0.0001);
+        assert!(speed <= 30.0 + 0.0001);
     }
 
     #[test]
     fn test_playground_drag() {
-        let mut world = ClientWorld::new();
+        let mut world = ClientWorld::with_prediction(true);
         world.entities.insert(
             NetworkId(1),
             SabSlot {
@@ -470,6 +700,7 @@ mod tests {
         let v2 = world.entities.get(&NetworkId(1)).unwrap().dx;
 
         assert!(v2 < v1);
-        assert!((v2 - v1 * 0.92).abs() < 0.0001);
+        // drag_factor = 1 / (1 + 2.0/60) = 60/62 ≈ 0.9677
+        assert!((v2 - v1 * (1.0 / (1.0 + 2.0 / 60.0))).abs() < 0.0001);
     }
 }

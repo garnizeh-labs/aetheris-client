@@ -211,6 +211,9 @@ impl DebugDrawable for SabSlot {
 #[derive(Copy, Clone, Debug, Pod, Zeroable)]
 struct CameraUniform {
     view_proj: [f32; 16],
+    world_size: [f32; 4], // [width, height, min_x, min_y]
+    camera_pos: [f32; 2],
+    _padding: [f32; 2],
 }
 
 #[repr(C)]
@@ -269,6 +272,13 @@ pub struct RenderState {
 
     clear_color: wgpu::Color,
     room_bounds: (f32, f32, f32, f32),
+
+    // Performance tracking
+    last_frame_time: f64,
+
+    // Visual effects state
+    speed_shake_enabled: bool,
+    latest_player_speed: f32,
 }
 
 impl RenderState {
@@ -772,6 +782,9 @@ impl RenderState {
                 a: 1.0,
             },
             room_bounds: (0.0, 0.0, 0.0, 0.0),
+            last_frame_time: crate::performance_now(),
+            speed_shake_enabled: true,
+            latest_player_speed: 0.0,
         })
     }
 
@@ -823,6 +836,10 @@ impl RenderState {
     /// Returns the wall-clock time spent in submission (ms).
     pub fn render_frame_with_compact_slots(&mut self, entities: &[SabSlot]) -> f64 {
         let start = crate::performance_now();
+
+        // Calculate frame delta for frame-rate independent smoothing (M10105)
+        let dt = ((start - self.last_frame_time) * 0.001).min(0.1) as f32;
+        self.last_frame_time = start;
         let surface_texture = match self.surface.get_current_texture() {
             CurrentSurfaceTexture::Success(t) => t,
             CurrentSurfaceTexture::Suboptimal(t) => t,
@@ -872,22 +889,76 @@ impl RenderState {
         });
 
         // Smooth camera follow (lerp)
-        let lerp_factor = 0.1;
-        self.camera_current = self.camera_current.lerp(self.camera_target, lerp_factor);
+        // Using frame-rate independent lerp: 1 - exp(-lambda * dt)
+        let camera_lambda = 30.0;
+        let lerp_factor = (1.0 - (-camera_lambda * dt).exp()).clamp(0.0, 1.0);
+
+        let world_width = self.room_bounds.2 - self.room_bounds.0;
+        let world_height = self.room_bounds.3 - self.room_bounds.1;
+        if world_width > 0.1 && world_height > 0.1 {
+            // Calculate shortest-path delta (wrap-aware)
+            let dx = ((self.camera_target.x - self.camera_current.x + world_width * 0.5)
+                .rem_euclid(world_width))
+                - world_width * 0.5;
+            let dy = ((self.camera_target.y - self.camera_current.y + world_height * 0.5)
+                .rem_euclid(world_height))
+                - world_height * 0.5;
+
+            // Apply lerp smoothing to the delta
+            self.camera_current.x += dx * lerp_factor;
+            self.camera_current.y += dy * lerp_factor;
+            self.camera_current.z = self.camera_target.z;
+
+            // Normalize camera center to stay within canonical room bounds [min, max)
+            self.camera_current.x = (self.camera_current.x - self.room_bounds.0)
+                .rem_euclid(world_width)
+                + self.room_bounds.0;
+            self.camera_current.y = (self.camera_current.y - self.room_bounds.1)
+                .rem_euclid(world_height)
+                + self.room_bounds.1;
+        } else {
+            self.camera_current = self.camera_current.lerp(self.camera_target, lerp_factor);
+        }
 
         // 2. Update Camera Uniform
         let aspect = self.width as f32 / self.height as f32;
         let zoom = self.camera_zoom;
         let projection =
             Mat4::orthographic_rh(-aspect * zoom, aspect * zoom, -zoom, zoom, -100.0, 100.0);
+        // 2. Global Camera Shake (M1042)
+        // Instead of shaking individual entities (which causes aliasing/flicker),
+        // we shake the camera itself. This makes the whole world vibrate together
+        // when moving at high speeds, which feels much more "premium".
+        let mut shake_offset = Vec3::ZERO;
+        if self.speed_shake_enabled {
+            let speed_ratio = (self.latest_player_speed / 75.0).clamp(0.0, 1.0);
+            if speed_ratio > 0.1 {
+                let now = (crate::performance_now() * 0.001) as f32;
+                let shake_freq = 45.0;
+                let shake_amp = 0.05 * speed_ratio;
+                shake_offset.x = (now * shake_freq).sin() * shake_amp;
+                shake_offset.y = (now * (shake_freq * 1.1)).cos() * shake_amp;
+            }
+        }
+
+        let camera_final_pos = self.camera_current + shake_offset;
+
         let look_at = Mat4::look_at_rh(
-            self.camera_current + Vec3::new(0.0, 0.0, 10.0), // Above looking down
-            self.camera_current,                             // At camera current position
-            Vec3::Y,                                         // Up is Y
+            camera_final_pos + Vec3::new(0.0, 0.0, 10.0), // Above looking down
+            camera_final_pos,                             // At camera current position
+            Vec3::Y,                                      // Up is Y
         );
 
         let camera_uniform = CameraUniform {
             view_proj: (projection * look_at).to_cols_array(),
+            world_size: [
+                world_width,
+                world_height,
+                self.room_bounds.0,
+                self.room_bounds.1,
+            ],
+            camera_pos: [camera_final_pos.x, camera_final_pos.y],
+            _padding: [0.0, 0.0],
         };
         self.queue.write_buffer(
             &self.camera_buffer,
@@ -934,21 +1005,67 @@ impl RenderState {
 
             // Batch entities by type for instanced drawing
             let mut type_batches: HashMap<u16, Vec<ObjectInstance>> = HashMap::new();
+
             for ent in &sorted_entities {
                 if let Some(primitive) = self.primitives.get(&ent.entity_type) {
-                    // Use X and Y for screen coordinates (Z in entities is used for layer sorting)
-                    let model_matrix = Mat4::from_translation(Vec3::new(ent.x, ent.y, 0.0))
-                        * Mat4::from_rotation_z(ent.rotation);
+                    let is_player = (ent.flags & 0x04) != 0;
+                    let speed = (ent.dx * ent.dx + ent.dy * ent.dy).sqrt();
 
-                    let instance = ObjectInstance {
-                        model_matrix: model_matrix.to_cols_array(),
-                        color: primitive.color,
-                    };
+                    if is_player {
+                        self.latest_player_speed = speed;
+                    }
 
-                    type_batches
-                        .entry(ent.entity_type)
-                        .or_default()
-                        .push(instance);
+                    // Speed Effects (Shake & Blur)
+                    // Start effect at 80% of DEFAULT_MAX_VELOCITY (100.0)
+                    let speed_ratio = ((speed - 80.0) / 20.0).clamp(0.0, 1.0);
+
+                    if is_player && speed_ratio > 0.0 {
+                        // 1. Trail Blur (After-images)
+                        // We draw 2 faint trails behind the ship along its negative velocity vector.
+                        // TODO: [VS-02] Replace this with a proper post-processing motion blur shader.
+                        for i in 1..=2 {
+                            let trail_offset = -Vec3::new(ent.dx, ent.dy, 0.0) * (0.01 * i as f32);
+                            let trail_alpha = 0.4 / (i as f32);
+                            let mut trail_color = primitive.color;
+                            trail_color[3] *= trail_alpha * speed_ratio;
+
+                            let trail_matrix =
+                                Mat4::from_translation(Vec3::new(ent.x, ent.y, 0.0) + trail_offset)
+                                    * Mat4::from_rotation_z(ent.rotation);
+
+                            type_batches
+                                .entry(ent.entity_type)
+                                .or_default()
+                                .push(ObjectInstance {
+                                    model_matrix: trail_matrix.to_cols_array(),
+                                    color: trail_color,
+                                });
+                        }
+
+                        // Add the main instance (no per-entity shake anymore, it's global)
+                        let model_matrix = Mat4::from_translation(Vec3::new(ent.x, ent.y, 0.0))
+                            * Mat4::from_rotation_z(ent.rotation);
+
+                        type_batches
+                            .entry(ent.entity_type)
+                            .or_default()
+                            .push(ObjectInstance {
+                                model_matrix: model_matrix.to_cols_array(),
+                                color: primitive.color,
+                            });
+                    } else {
+                        // Normal drawing
+                        let model_matrix = Mat4::from_translation(Vec3::new(ent.x, ent.y, 0.0))
+                            * Mat4::from_rotation_z(ent.rotation);
+
+                        type_batches
+                            .entry(ent.entity_type)
+                            .or_default()
+                            .push(ObjectInstance {
+                                model_matrix: model_matrix.to_cols_array(),
+                                color: primitive.color,
+                            });
+                    }
                 }
             }
 

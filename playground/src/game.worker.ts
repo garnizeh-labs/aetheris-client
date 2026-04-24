@@ -125,7 +125,7 @@ async function pollMetricsOnce(forceManifest: boolean = false) {
             await withClient(async (c) => {
                 // 1. Periodic request from server (throttled to 10s)
                 if (shouldRequestManifest) {
-                    console.log(`[GameWorker] Outgoing System Manifest request (force=${forceManifest})...`);
+                    console.debug(`[GameWorker] Outgoing System Manifest request (force=${forceManifest})...`);
                     await c.request_system_manifest();
                 }
 
@@ -196,10 +196,13 @@ self.onmessage = async (e) => {
         try { wasm_flush_telemetry(); } catch { /* ignore */ }
 
     } else if (type === 'key_down') {
+        console.debug(`[GameWorker] KeyDown: ${payload.key}`);
         heldKeys.add(payload.key);
     } else if (type === 'key_up') {
+        console.debug(`[GameWorker] KeyUp: ${payload.key}`);
         heldKeys.delete(payload.key);
     } else if (type === 'clear_keys') {
+        console.debug('[GameWorker] Keys cleared');
         heldKeys.clear();
     } else if (type === 'pause_toggle') {
         isPaused = typeof payload?.paused === 'boolean' ? payload.paused : !isPaused;
@@ -247,7 +250,7 @@ self.onmessage = async (e) => {
             }
         }
     } else if (type === 'p_clear') {
-        console.log('[GameWorker] Clear world requested');
+        console.debug('[GameWorker] Clear world requested');
         withClient(async (c) => await c.playground_clear_server());
     } else if (type === 'p_toggle_rotation') {
         console.log(`[GameWorker] Toggle rotation: ${payload.enabled}`);
@@ -272,16 +275,18 @@ self.onmessage = async (e) => {
             console.log(`[GameWorker] playground_stress_test() WASM call dispatched — waiting for server response`);
         });
     } else if (type === 'start_session') {
-        console.log('[GameWorker] StartSession requested — asking server for session ship + Possession');
+        console.debug('[GameWorker] StartSession requested — asking server for session ship + Possession');
+        console.debug(`[DBG] start_session: isBusy=${isBusy} queueLen=${commandQueue.length} heldKeys=[${[...heldKeys].join(',')}]`);
         withClient(async (c) => {
+            console.debug('[GameWorker] Calling c.start_session_net()...');
             await c.start_session_net();
+            console.log(`[DBG] start_session_net() returned. connState=${c.connection_state} latestTick=${c.latest_tick()}`);
         });
     } else if (type === 'request_otp') {
         try {
             if (!client) throw new Error('Client not initialized');
             const { email } = payload;
             const baseUrl = import.meta.env.VITE_AUTH_URL || 'http://127.0.0.1:50051';
-            console.log(`[Worker] Requesting OTP for ${email} at ${baseUrl}`);
             const requestId = await AetherisClient.request_otp(baseUrl, email);
             self.postMessage({ type: 'otp_requested', payload: { requestId } });
         } catch (err) {
@@ -293,7 +298,6 @@ self.onmessage = async (e) => {
             if (!client) throw new Error('Client not initialized');
             const { requestId, code } = payload;
             const baseUrl = import.meta.env.VITE_AUTH_URL || 'http://127.0.0.1:50051';
-            console.log(`[Worker] Logging in with OTP: ${requestId} code: ${code} at ${baseUrl}`);
             const sessionToken = await AetherisClient.login_with_otp(baseUrl, requestId, code);
             currentSessionToken = sessionToken;
             self.postMessage({ type: 'login_success', payload: { sessionToken } });
@@ -331,7 +335,7 @@ self.onmessage = async (e) => {
                 payload: { clientId: 'P-123', tick: 0 } // Real ID from server later
             });
 
-            if (simIntervalId) clearTimeout(simIntervalId);
+            if (simIntervalId) clearTimeout(simIntervalId as number);
             let localInputTick = 0n;
             const tickLoop = async () => {
                 if (isPaused) {
@@ -340,19 +344,15 @@ self.onmessage = async (e) => {
                 }
 
                 await withClient(async (c) => {
-                    // M10146 — Send input to server before ticking
-                    // We must use a monotonically increasing tick for inputs, 
-                    // otherwise the server's anti-replay measure (Kind=128) drops inputs 
-                    // generated within the same server tick window.
                     if (localInputTick === 0n) {
-                        // Initialize sequence to a reasonable tick context
-                        localInputTick = BigInt(c.latest_tick()) || 1n;
+                        const latestTick = BigInt(c.latest_tick());
+                        localInputTick = latestTick > 0n ? latestTick : 1n;
                     }
 
                     const input = computeInput(Number(localInputTick));
+                    c.playground_apply_input(input.move_x, input.move_y, input.actions_mask);
                     await c.send_input(localInputTick, input.move_x, input.move_y, input.actions_mask, null);
-                    localInputTick++;
-
+                    localInputTick += 1n;
                     await c.tick();
 
                     // M10146 — Check for disconnected state and trigger reconnection
@@ -367,7 +367,9 @@ self.onmessage = async (e) => {
 
             // Reset manifest cache to ensure the new UI instance receives it
             lastLoggedManifestWorker = '';
-            pollMetricsOnce(true).catch(e => console.error('[GameWorker] Initial manifest poll failed:', e));
+            // Start the metrics poll loop (M10105 / M10115)
+            if (metricsIntervalId) clearTimeout(metricsIntervalId as number);
+            pollMetrics(true).catch(e => console.error('[GameWorker] Metrics poll loop failed:', e));
         } catch (err) {
             console.error('[GameWorker] Connection failed:', err);
             self.postMessage({ type: 'connection_error', payload: { reason: (err as any).toString(), retriable: true } });
@@ -399,10 +401,22 @@ function computeInput(tick: number) {
     let actions_mask = 0;
 
     // Movement (WASD + Arrows)
-    if (heldKeys.has('KeyW') || heldKeys.has('ArrowUp')) move_y = 1.0;
-    if (heldKeys.has('KeyS') || heldKeys.has('ArrowDown')) move_y = -1.0;
-    if (heldKeys.has('KeyA') || heldKeys.has('ArrowLeft')) move_x = -1.0;
-    if (heldKeys.has('KeyD') || heldKeys.has('ArrowRight')) move_x = 1.0;
+    let up = heldKeys.has('KeyW') || heldKeys.has('ArrowUp');
+    let down = heldKeys.has('KeyS') || heldKeys.has('ArrowDown');
+    let left = heldKeys.has('KeyA') || heldKeys.has('ArrowLeft');
+    let right = heldKeys.has('KeyD') || heldKeys.has('ArrowRight');
+
+    if (up && !down) move_y = 1.0;
+    if (down && !up) move_y = -1.0;
+    if (left && !right) move_x = -1.0;
+    if (right && !left) move_x = 1.0;
+
+    // Normalize diagonal movement
+    if (move_x !== 0 && move_y !== 0) {
+        const mag = Math.sqrt(move_x * move_x + move_y * move_y);
+        move_x /= mag;
+        move_y /= mag;
+    }
 
     // Specific Actions
     if (heldKeys.has('Space')) actions_mask |= 0x01; // FirePrimary

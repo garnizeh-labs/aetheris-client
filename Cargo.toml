@@ -20,9 +20,9 @@ aetheris-client-wasm = { path = "crates/aetheris-client-wasm", version = "0.3.18
 aetheris-client-native = { path = "crates/aetheris-client-native", version = "0.3.18" }
 
 # Protocol (published — garnizeh-labs/aetheris-protocol)
-aetheris-protocol = { version = "0.2.18" }
-aetheris-encoder-serde = { version = "0.2.18" }
-aetheris-encoder-bitpack = { version = "0.2.18" }
+aetheris-protocol = { version = "0.2.19" }
+aetheris-encoder-serde = { version = "0.2.19" }
+aetheris-encoder-bitpack = { version = "0.2.19" }
 
 # Core Traits & Utilities
 thiserror = "2.0.18"

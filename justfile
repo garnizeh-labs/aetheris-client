@@ -129,18 +129,19 @@ vite: client-install
     @just wait-for-cert
     cd playground && VITE_SERVER_CERT_HASH=$(cat ../target/dev-certs/cert.sha256 2>/dev/null || echo "missing") npm run dev &
 
-# Start the Vite dev server in connected-playground mode (background)
+# Start the Vite dev server in playground mode (background)
 [group('run')]
-vite-connected: client-install
+vite-playground: client-install
     @just wait-for-cert
-    cd playground && VITE_PLAYGROUND_CONNECTED=true VITE_SERVER_CERT_HASH=$(cat ../target/dev-certs/cert.sha256 2>/dev/null || echo "missing") npm run dev &
+    cd playground && VITE_SERVER_CERT_HASH=$(cat ../target/dev-certs/cert.sha256 2>/dev/null || echo "missing") npm run dev &
 
-# Full playground session in connected mode
+# Start the playground session (requires active server)
 [group('run')]
-playground-connected: stop wasm-dev
+playground: stop wasm-dev
     @mkdir -p logs
-    cd playground && VITE_PLAYGROUND_CONNECTED=true VITE_TELEMETRY_URL=http://127.0.0.1:50055 VITE_SERVER_CERT_HASH=$(cat ../../aetheris-engine/target/dev-certs/cert.sha256 2>/dev/null || echo "missing") npm run dev >> ../logs/vite.log 2>&1 &
-    @echo "Playground connected session ready at http://localhost:5173/playground.html"
+    @just wait-for-cert
+    cd playground && VITE_TELEMETRY_URL=http://127.0.0.1:50055 VITE_SERVER_CERT_HASH=$(cat ../../aetheris-engine/target/dev-certs/cert.sha256 2>/dev/null || echo "missing") npm run dev >> ../logs/vite.log 2>&1 &
+    @echo "Playground session ready at http://localhost:5173/playground.html"
 
 # Helper to wait for server certificate
 wait-for-cert:
@@ -169,20 +170,7 @@ client: wasm client-build
 [group('build')]
 client-dev-full: wasm-dev client-build
 
-# Start the playground in isolated sandbox mode (no server, no auth)
-[group('run')]
-playground: stop wasm-dev client-install
-    @mkdir -p logs
-    @echo "Starting Playground (Isolated)..."
-    cd playground && VITE_PLAYGROUND_CONNECTED=false npm run dev >> ../logs/vite.log 2>&1 &
-    @echo ""
-    @echo "  \x1b[1;36m┌─────────────────────────────────────────────────────────────┐\x1b[0m"
-    @echo "  \x1b[1;36m│\x1b[0m  \x1b[1;37mAetheris Client — \x1b[1;34mPLAYGROUND (MODE: SANDBOX)\x1b[0m              \x1b[1;36m│\x1b[0m"
-    @echo "  \x1b[1;36m├─────────────────────────────────────────────────────────────┤\x1b[0m"
-    @echo "  \x1b[1;36m│\x1b[0m  URL: \x1b[4;34mhttp://localhost:5173/playground.html\x1b[0m                   \x1b[1;36m│\x1b[0m"
-    @echo "  \x1b[1;36m│\x1b[0m  Status: \x1b[1;32mIsolated Sandbox (No server, no auth)\x1b[0m              \x1b[1;36m│\x1b[0m"
-    @echo "  \x1b[1;36m└─────────────────────────────────────────────────────────────┘\x1b[0m"
-    @echo ""
+
 
 
 # Remove all build artefacts
