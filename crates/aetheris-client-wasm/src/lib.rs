@@ -881,7 +881,8 @@ mod wasm_impl {
 
                         // M1020 — Continuous Clock Sync to prevent 1-2s rubber-banding
                         if max_tick > 0 {
-                            let drift = (self.world_state.latest_tick as i32 - max_tick as i32).abs();
+                            let drift =
+                                (self.world_state.latest_tick as i32 - max_tick as i32).abs();
                             if self.first_playground_tick || drift > 20 {
                                 tracing::info!(
                                     latest = self.world_state.latest_tick,
@@ -925,7 +926,10 @@ mod wasm_impl {
                 );
 
                 if !applied && self.world_state.latest_tick % 120 == 0 {
-                    tracing::warn!(tick = self.world_state.latest_tick, "Simulation loop running but no LocalPlayer (0x04) entity found to apply input to");
+                    tracing::warn!(
+                        tick = self.world_state.latest_tick,
+                        "Simulation loop running but no LocalPlayer (0x04) entity found to apply input to"
+                    );
                 }
 
                 // 2. Advance global tick

@@ -951,7 +951,12 @@ impl RenderState {
 
         let camera_uniform = CameraUniform {
             view_proj: (projection * look_at).to_cols_array(),
-            world_size: [world_width, world_height, self.room_bounds.0, self.room_bounds.1],
+            world_size: [
+                world_width,
+                world_height,
+                self.room_bounds.0,
+                self.room_bounds.1,
+            ],
             camera_pos: [camera_final_pos.x, camera_final_pos.y],
             _padding: [0.0, 0.0],
         };
@@ -1024,9 +1029,9 @@ impl RenderState {
                             let mut trail_color = primitive.color;
                             trail_color[3] *= trail_alpha * speed_ratio;
 
-                            let trail_matrix = Mat4::from_translation(
-                                Vec3::new(ent.x, ent.y, 0.0) + trail_offset,
-                            ) * Mat4::from_rotation_z(ent.rotation);
+                            let trail_matrix =
+                                Mat4::from_translation(Vec3::new(ent.x, ent.y, 0.0) + trail_offset)
+                                    * Mat4::from_rotation_z(ent.rotation);
 
                             type_batches
                                 .entry(ent.entity_type)
