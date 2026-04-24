@@ -125,6 +125,8 @@ pub struct MetricsSnapshot {
     pub entity_count: u32,
     pub snapshot_count: u32,
     pub dropped_events: u32,
+    pub cargo_ore: u32,
+    pub cargo_capacity: u32,
 }
 
 // ---------------------------------------------------------------------------
@@ -259,6 +261,10 @@ pub struct MetricsCollector {
     // Snapshot buffer depth (render interpolation)
     snapshot_count: u32,
 
+    // Cargo hold status (for player ship)
+    cargo_ore: u32,
+    cargo_capacity: u32,
+
     // Flush endpoint
     telemetry_url: String,
 
@@ -285,6 +291,8 @@ impl MetricsCollector {
             last_rtt_ms: None,
             entity_count: 0,
             snapshot_count: 0,
+            cargo_ore: 0,
+            cargo_capacity: 0,
             telemetry_url,
             session_id,
             trace_id,
@@ -321,6 +329,12 @@ impl MetricsCollector {
     /// Update snapshot buffer depth (render interpolation buffer).
     pub fn update_snapshot_count(&mut self, count: u32) {
         self.snapshot_count = count;
+    }
+
+    /// Update cargo hold status.
+    pub fn update_cargo(&mut self, ore: u32, capacity: u32) {
+        self.cargo_ore = ore;
+        self.cargo_capacity = capacity;
     }
 
     /// Push a structured lifecycle / error event.
@@ -367,7 +381,7 @@ impl MetricsCollector {
         let frame_p99 = self.frame_sampler.p99();
         let sim_p99 = self.sim_sampler.p99();
         let summary = format!(
-            "fps={:.1} frame_p99={:.2}ms sim_p99={:.2}ms rtt={} entities={} snapshots={} dropped={}",
+            "fps={:.1} frame_p99={:.2}ms sim_p99={:.2}ms rtt={} entities={} snapshots={} dropped={} {}",
             self.fps_current,
             frame_p99,
             sim_p99,
@@ -376,6 +390,7 @@ impl MetricsCollector {
             self.entity_count,
             self.snapshot_count,
             self.ring.dropped,
+            format!("cargo={}/{}", self.cargo_ore, self.cargo_capacity),
         );
 
         self.push_event(1, "metrics", &summary, "metrics_snapshot", self.last_rtt_ms);
@@ -415,6 +430,8 @@ impl MetricsCollector {
             entity_count: self.entity_count,
             snapshot_count: self.snapshot_count,
             dropped_events: self.ring.dropped,
+            cargo_ore: self.cargo_ore,
+            cargo_capacity: self.cargo_capacity,
         }
     }
 }

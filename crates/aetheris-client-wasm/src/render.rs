@@ -1120,7 +1120,6 @@ impl RenderState {
 
             // 5.5. Draw Lasers (Mining Beams)
             let mut laser_vertices = Vec::new();
-            let laser_color = [1.0, 0.4, 0.0, 1.0]; // Bright Orange
 
             // O(n) Optimization: Pre-build target map for O(1) lookups in the loop
             let target_map: HashMap<u16, &SabSlot> = sorted_entities
@@ -1136,13 +1135,38 @@ impl RenderState {
                     if let Some(target) = target_map.get(&ent.mining_target_id) {
                         let end = Vec3::new(target.x, target.y, 0.0);
 
+                        // Triple-beam effect: Core (White) + Glow (Orange)
+                        let core_color = [1.0, 1.0, 1.0, 1.0];
+                        let glow_color = [1.0, 0.4, 0.0, 0.5];
+
+                        // 1. Core beam (precise)
                         laser_vertices.push(DebugVertex {
                             position: start.to_array(),
-                            color: laser_color,
+                            color: core_color,
                         });
                         laser_vertices.push(DebugVertex {
                             position: end.to_array(),
-                            color: laser_color,
+                            color: core_color,
+                        });
+
+                        // 2. Outer Glow (slightly offset for thickness)
+                        let offset = 0.08;
+                        laser_vertices.push(DebugVertex {
+                            position: [start.x + offset, start.y + offset, 0.0],
+                            color: glow_color,
+                        });
+                        laser_vertices.push(DebugVertex {
+                            position: [end.x + offset, end.y + offset, 0.0],
+                            color: glow_color,
+                        });
+
+                        laser_vertices.push(DebugVertex {
+                            position: [start.x - offset, start.y - offset, 0.0],
+                            color: glow_color,
+                        });
+                        laser_vertices.push(DebugVertex {
+                            position: [end.x - offset, end.y - offset, 0.0],
+                            color: glow_color,
                         });
                     }
                 }

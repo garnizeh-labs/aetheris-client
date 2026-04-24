@@ -20,6 +20,7 @@ dependencies = [
  "getrandom 0.3.4",
  "getrandom 0.4.2",
  "glam",
+ "hex",
  "js-sys",
  "metrics",
  "prost",
@@ -48,8 +49,6 @@ dependencies = [
 [[package]]
 name = "aetheris-encoder-serde"
 version = "0.2.19"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "920b2996e3ea2ebeb55d9979c8452c49ca83e0cb740f38dcf66556546ed5c9eb"
 dependencies = [
  "aetheris-protocol",
  "metrics",
@@ -61,8 +60,6 @@ dependencies = [
 [[package]]
 name = "aetheris-protocol"
 version = "0.2.19"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ca54ce9a5e06fe5a98f2d01cdb277a2389968adc7a1d960b0298944f8b71fcbb"
 dependencies = [
  "async-trait",
  "serde",
@@ -616,6 +613,12 @@ name = "heck"
 version = "0.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "2304e00983f87ffb38b55b444b5e3b60a884b5d30c0fca7d82fe33449bbe55ea"
+
+[[package]]
+name = "hex"
+version = "0.4.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7f24254aa9a54b5c858eaee2f5bccdb46aaf0e486a595ed5fd8f86ba55232a70"
 
 [[package]]
 name = "hexf-parse"
@@ -2419,3 +2422,7 @@ name = "zmij"
 version = "1.0.21"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b8848ee67ecc8aedbaf3e4122217aff892639231befc6a1b58d29fff4c2cabaa"
+
+[[patch.unused]]
+name = "aetheris-encoder-bitpack"
+version = "0.2.19"

@@ -781,6 +781,16 @@ class AetherisPlayground {
             droppedEl.style.color = metrics.dropped_events > 0 ? 'var(--accent-danger)' : '';
         }
 
+        const cargoEl = document.getElementById('stat-cargo');
+        if (cargoEl) {
+            cargoEl.innerText = `${metrics.cargo_ore} / ${metrics.cargo_capacity}`;
+            if (metrics.cargo_capacity > 0 && metrics.cargo_ore >= metrics.cargo_capacity) {
+                cargoEl.style.color = 'var(--accent-danger)';
+            } else {
+                cargoEl.style.color = '';
+            }
+        }
+
         const sabStat = document.getElementById('stat-sab');
         if (sabStat) {
             sabStat.innerText = `ACTIVE (${metrics.snapshot_count} Snaps)`;

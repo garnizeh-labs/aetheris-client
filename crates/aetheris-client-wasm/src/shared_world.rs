@@ -52,8 +52,12 @@ pub struct SabSlot {
     pub mining_active: u8, // Offset 43, size 1
     /// Current cargo count.
     pub cargo_ore: u16, // Offset 44, size 2
+    /// Maximum cargo capacity.
+    pub cargo_capacity: u16, // Offset 46, size 2
     /// Network ID of the mining target (truncated to 16-bit for Phase 1).
-    pub mining_target_id: u16, // Offset 46, size 2
+    pub mining_target_id: u16, // Offset 48, size 2
+    /// Padding to maintain 8-byte alignment (`SabSlot` size: 56 bytes).
+    pub padding: [u8; 6], // Offset 50, size 6
 }
 
 /// The header for the `SharedArrayBuffer`.

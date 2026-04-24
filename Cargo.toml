@@ -77,6 +77,6 @@ codegen-units = 1 # Better LTO
 
 [patch.crates-io]
 # Local path overrides — remove when aetheris-protocol is published to crates.io
-# aetheris-protocol = { path = "../aetheris-protocol/crates/aetheris-protocol" }
-# aetheris-encoder-serde = { path = "../aetheris-protocol/crates/aetheris-encoder-serde" }
-# aetheris-encoder-bitpack = { path = "../aetheris-protocol/crates/aetheris-encoder-bitpack" }
+aetheris-protocol = { path = "../aetheris-protocol/crates/aetheris-protocol" }
+aetheris-encoder-serde = { path = "../aetheris-protocol/crates/aetheris-encoder-serde" }
+aetheris-encoder-bitpack = { path = "../aetheris-protocol/crates/aetheris-encoder-bitpack" }
