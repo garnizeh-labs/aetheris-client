@@ -139,6 +139,7 @@ vite-playground: client-install
 [group('run')]
 playground: stop wasm-dev
     @mkdir -p logs
+    @just wait-for-cert
     cd playground && VITE_TELEMETRY_URL=http://127.0.0.1:50055 VITE_SERVER_CERT_HASH=$(cat ../../aetheris-engine/target/dev-certs/cert.sha256 2>/dev/null || echo "missing") npm run dev >> ../logs/vite.log 2>&1 &
     @echo "Playground session ready at http://localhost:5173/playground.html"
 
