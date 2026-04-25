@@ -34,6 +34,7 @@ tonic-web-wasm-client = { workspace = true }
 dashmap = { workspace = true }
 glam = { workspace = true }
 ruzstd = "0.8.2"
+hex = "0.4.3"
 twox-hash = "2.1.2"
 getrandom_v04 = { workspace = true }
 

@@ -148,8 +148,10 @@ impl WorldState for ClientWorld {
                     entity_type: 0,
                     flags: 1,
                     cargo_ore: 0,
+                    cargo_capacity: 0,
                     mining_target_id: 0,
                     mining_active: 0,
+                    padding: [0; 6],
                 }
             });
 
@@ -466,7 +468,12 @@ impl ClientWorld {
                 }
             }
             Err(e) => {
-                tracing::warn!(network_id = update.network_id.0, error = ?e, "Failed to decode MiningBeam");
+                tracing::warn!(
+                    network_id = update.network_id.0,
+                    error = ?e,
+                    payload = %hex::encode(&update.payload),
+                    "Failed to decode MiningBeam"
+                );
             }
         }
     }
@@ -477,6 +484,7 @@ impl ClientWorld {
             Ok(cargo) => {
                 if let Some(entry) = self.entities.get_mut(&update.network_id) {
                     entry.cargo_ore = cargo.ore_count;
+                    entry.cargo_capacity = cargo.capacity;
                     entry.flags |= 0x04;
                 }
             }

@@ -23,6 +23,10 @@
             --engine-z-sidebar: 700;
             --engine-z-canvas: 0;
             --engine-z-underlay: -1;
+
+            /* Default sidebar dimensions for initial load */
+            --world-sidebar-width: 320px;
+            --world-sidebar-gap: 20px;
         }
 
         /* ── Reset & base ── */
@@ -49,7 +53,7 @@
             overflow: hidden;
             height: 100vh;
             position: relative;
-            cursor: none; /* Hide mouse in world */
+            cursor: default; /* Show mouse by default (HUD/Sidebar) */
         }
 
         body::before {
@@ -63,6 +67,65 @@
             opacity: 0.04;
             pointer-events: none;
             z-index: var(--engine-z-underlay);
+        }
+
+        /* ── M10156 — Cinematic Overlays ── */
+        #engine-logo-overlay {
+            position: fixed;
+            top: 0;
+            bottom: 0;
+            left: calc(var(--world-sidebar-width) + (var(--world-sidebar-gap) * 2));
+            width: calc(100vw - (var(--world-sidebar-width) + (var(--world-sidebar-gap) * 2)));
+            background: #000;
+            z-index: 500; /* Above canvas (0), well below sidebar (700) */
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: opacity 1.2s cubic-bezier(0.4, 0, 0.2, 1), visibility 1.2s;
+            pointer-events: all;
+            backdrop-filter: blur(20px);
+            cursor: default; /* Ensure cursor is visible on the logo area during establishing phase */
+        }
+
+        #engine-logo-overlay.hidden {
+            opacity: 0;
+            visibility: hidden;
+            pointer-events: none;
+        }
+
+        .logo-container {
+            width: min(600px, 80vw);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 2rem;
+            animation: logo-drift 20s ease-in-out infinite alternate;
+        }
+
+        .logo-img {
+            width: 100%;
+            height: auto;
+            filter: drop-shadow(0 0 30px var(--accent-glow, rgba(56, 189, 248, 0.3)));
+        }
+
+        .logo-text {
+            font-family: var(--world-font-display);
+            font-size: 0.75rem;
+            letter-spacing: 0.4em;
+            color: var(--accent-primary);
+            text-transform: uppercase;
+            opacity: 0.6;
+            animation: pulse-glow 4s ease-in-out infinite;
+        }
+
+        @keyframes logo-drift {
+            from { transform: translateY(-10px) scale(1); }
+            to { transform: translateY(10px) scale(1.02); }
+        }
+
+        @keyframes pulse-glow {
+            0%, 100% { opacity: 0.4; text-shadow: 0 0 10px transparent; }
+            50% { opacity: 0.8; text-shadow: 0 0 20px var(--accent-glow); }
         }
 
         /* ── Glass panel utility ── */
@@ -864,6 +927,14 @@
 
 <body>
     <!-- ═══ Main Layout ═══ -->
+    <!-- M10156 — Cinematic Logo Overlay -->
+    <div id="engine-logo-overlay">
+        <div class="logo-container">
+            <img src="media/image/logo/aetheris_logo_modern.png" alt="Aetheris" class="logo-img">
+            <div class="logo-text">Establishing Secure Uplink</div>
+        </div>
+    </div>
+
     <canvas id="engine-canvas" width="800" height="600"></canvas>
 
     <!-- ═══ Sidebar ═══ -->
@@ -929,6 +1000,10 @@
                         <div class="stat">
                             <span class="label">Entities</span>
                             <span id="stat-entities" class="value">0</span>
+                        </div>
+                        <div class="stat">
+                            <span class="label">Cargo</span>
+                            <span id="stat-cargo" class="value">0 / 0</span>
                         </div>
                     </div>
                 </div>

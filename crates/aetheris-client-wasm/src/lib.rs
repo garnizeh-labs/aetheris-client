@@ -288,6 +288,24 @@ mod wasm_impl {
         }
 
         #[wasm_bindgen]
+        pub fn set_view_state(&mut self, state: u32) {
+            use crate::render::ViewState;
+            let state = match state {
+                0 => ViewState::Logo,
+                1 => ViewState::Roaming,
+                2 => ViewState::Entering,
+                3 => ViewState::Playing,
+                _ => return,
+            };
+
+            if let Some(rs) = &mut self.render_state {
+                rs.set_view_state(state);
+            } else {
+                tracing::warn!("set_view_state called but render_state is None");
+            }
+        }
+
+        #[wasm_bindgen]
         pub async fn request_otp(base_url: String, email: String) -> Result<String, String> {
             crate::auth::request_otp(base_url, email).await
         }
@@ -955,9 +973,18 @@ mod wasm_impl {
 
             let sim_time_ms = crate::performance_now() - sim_start;
             let count = self.world_state.entities.len() as u32;
+
+            // VS-02 — Update real-time cargo metrics for UI
+            let (cargo_ore, cargo_cap) = self
+                .world_state
+                .player_network_id
+                .and_then(|id| self.world_state.entities.get(&id))
+                .map_or((0, 0), |s| (s.cargo_ore as u32, s.cargo_capacity as u32));
+
             with_collector(|c| {
                 c.record_sim(sim_time_ms);
                 c.update_entity_count(count);
+                c.update_cargo(cargo_ore, cargo_cap);
             });
         }
 
@@ -1043,7 +1070,9 @@ mod wasm_impl {
                 flags: 0x01, // ALIVE
                 mining_active: 0,
                 cargo_ore: 0,
+                cargo_capacity: 0,
                 mining_target_id: 0,
+                padding: [0; 6],
             };
             self.world_state.entities.insert(id, slot);
         }
@@ -1179,12 +1208,36 @@ mod wasm_impl {
             }
             // Bit 1: ToggleMining
             if (actions_mask & 0x02) != 0 {
-                if let Some(id) = target_id_arg {
-                    actions.push(PlayerInputKind::ToggleMining {
-                        target: NetworkId(id),
-                    });
+                let target = if let Some(id) = target_id_arg {
+                    Some(NetworkId(id))
                 } else {
-                    tracing::warn!("ToggleMining requested without target_id; dropping action");
+                    // VS-02 Auto-target: find nearest asteroid
+                    if let Some(player_slot) = self.world_state.entities.get(&target_id) {
+                        let player_pos = (player_slot.x, player_slot.y);
+                        self.world_state
+                            .entities
+                            .iter()
+                            .filter(|(_, slot)| slot.entity_type == 5) // Asteroid (kind 5)
+                            .map(|(id, slot)| {
+                                let dx = slot.x - player_pos.0;
+                                let dy = slot.y - player_pos.1;
+                                (id, dx * dx + dy * dy)
+                            })
+                            .min_by(|a, b| {
+                                a.1.partial_cmp(&b.1).unwrap_or(std::cmp::Ordering::Equal)
+                            })
+                            .map(|(id, _)| *id)
+                    } else {
+                        None
+                    }
+                };
+
+                if let Some(id) = target {
+                    actions.push(PlayerInputKind::ToggleMining { target: id });
+                } else {
+                    tracing::warn!(
+                        "ToggleMining requested without target_id and no asteroid nearby; dropping action"
+                    );
                 }
             }
 

@@ -145,16 +145,16 @@ playground: stop wasm-dev
 
 # Helper to wait for server certificate
 wait-for-cert:
-    @echo "Waiting for target/dev-certs/cert.sha256 (Timeout: 60s)..."
+    @echo "Waiting for server certificate in ../aetheris-engine/target/dev-certs/ (Timeout: 60s)..."
     @i=0; while [ $i -lt 60 ]; do \
-        if [ -f target/dev-certs/cert.sha256 ]; then \
+        if [ -f ../aetheris-engine/target/dev-certs/cert.sha256 ]; then \
             echo "Certificate ready."; \
             exit 0; \
         fi; \
         sleep 1; \
         i=`expr $i + 1`; \
     done; \
-    echo "Error: target/dev-certs/cert.sha256 missing. Run 'just server' first."; \
+    echo "Error: Certificate missing in ../aetheris-engine/target/dev-certs/cert.sha256. Run 'just server' in engine first."; \
     exit 1
 
 # Stop all background processes

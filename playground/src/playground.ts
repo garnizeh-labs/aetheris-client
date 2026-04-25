@@ -8,6 +8,13 @@ const CONNECTED_MODE = true; // Always connected for VS-01+ authoritative valida
 // Declared globally via vite.config.ts
 declare const __APP_VERSION__: string;
 
+const ViewState = {
+    Logo: 0,
+    Roaming: 1,
+    Entering: 2,
+    Playing: 3,
+};
+
 class AetherisPlayground {
     private gameWorker!: Worker;
     private renderWorker!: Worker;
@@ -162,6 +169,11 @@ class AetherisPlayground {
                 engineBadge.style.borderColor = 'var(--accent-warning)';
                 break;
         }
+    }
+
+    private setViewState(state: number) {
+        console.log(`[Playground] Setting ViewState to ${state}`);
+        this.renderWorker.postMessage({ type: 'set_view_state', payload: { state } });
     }
 
     private applyMode() {
@@ -466,6 +478,11 @@ class AetherisPlayground {
                 case 'login_success': {
                     this.statusEl.innerText = 'AUTHENTICATED — Connecting transport...';
 
+                    // M10156 — Cinematic transition
+                    const logoOverlay = document.getElementById('engine-logo-overlay');
+                    if (logoOverlay) logoOverlay.classList.add('hidden');
+                    this.setViewState(ViewState.Roaming);
+
                     const sessionStatLogin = document.getElementById('stat-session');
                     if (sessionStatLogin) {
                         sessionStatLogin.innerText = 'LOGGED IN';
@@ -604,12 +621,23 @@ class AetherisPlayground {
         this.isSessionActive = true;
         this.updateSessionUI();
 
-        // 3. Request session ship with Possession from the server.
-        this.gameWorker.postMessage({ type: 'start_session' });
+        // 3. M10156 — Cinematic Entry
+        // Transition to 'Entering' state (local ship arrival animation)
+        this.setViewState(ViewState.Entering);
+        this.statusEl.innerText = 'CINEMATIC SEQUENCE — Interceptor Arriving...';
 
-        this.entityCount = 1;
-        this.updateEntityCount();
-        this.statusEl.innerText = 'SESSION STARTED — Awaiting Ship Possession';
+        // Delay server-side spawning until animation is almost complete (approx 2.5s)
+        setTimeout(() => {
+            if (!this.isSessionActive) return; // Cancelled
+
+            // 4. Request session ship with Possession from the server.
+            this.gameWorker.postMessage({ type: 'start_session' });
+            this.setViewState(ViewState.Playing);
+
+            this.entityCount = 1;
+            this.updateEntityCount();
+            this.statusEl.innerText = 'SESSION STARTED — Awaiting Ship Possession';
+        }, 2400);
     }
 
     /** Clears all entities from the playground. */
@@ -617,6 +645,9 @@ class AetherisPlayground {
         if (event) (event.target as HTMLElement).blur();
         this.isSessionActive = false;
         this.updateSessionUI();
+        
+        // M10156 — Return to roaming
+        this.setViewState(ViewState.Roaming);
 
         this.entityCount = 0;
         this.gameWorker.postMessage({ type: 'p_clear' });
@@ -779,6 +810,16 @@ class AetherisPlayground {
         if (droppedEl) {
             droppedEl.innerText = metrics.dropped_events.toString();
             droppedEl.style.color = metrics.dropped_events > 0 ? 'var(--accent-danger)' : '';
+        }
+
+        const cargoEl = document.getElementById('stat-cargo');
+        if (cargoEl) {
+            cargoEl.innerText = `${metrics.cargo_ore} / ${metrics.cargo_capacity}`;
+            if (metrics.cargo_capacity > 0 && metrics.cargo_ore >= metrics.cargo_capacity) {
+                cargoEl.style.color = 'var(--accent-danger)';
+            } else {
+                cargoEl.style.color = '';
+            }
         }
 
         const sabStat = document.getElementById('stat-sab');
