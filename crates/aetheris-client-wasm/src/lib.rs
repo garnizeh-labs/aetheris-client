@@ -713,7 +713,10 @@ mod wasm_impl {
                                                 }
                                                 aetheris_protocol::events::GameEvent::Possession {
                                                     network_id: _,
-                                                } => {
+                                                }
+                                                | aetheris_protocol::events::GameEvent::DamageEvent { .. }
+                                                | aetheris_protocol::events::GameEvent::DeathEvent { .. }
+                                                | aetheris_protocol::events::GameEvent::RespawnEvent { .. } => {
                                                     self.world_state.handle_game_event(&game_event);
                                                 }
                                                 aetheris_protocol::events::GameEvent::SystemManifest {
@@ -869,11 +872,14 @@ mod wasm_impl {
                                     );
                                     self.world_state.system_manifest = manifest.clone();
                                 }
-                                aetheris_protocol::events::GameEvent::Possession {
-                                    network_id: _,
-                                } => {
-                                    self.world_state.handle_game_event(&game_event);
-                                }
+                                                aetheris_protocol::events::GameEvent::Possession {
+                                                    network_id: _,
+                                                }
+                                                | aetheris_protocol::events::GameEvent::DamageEvent { .. }
+                                                | aetheris_protocol::events::GameEvent::DeathEvent { .. }
+                                                | aetheris_protocol::events::GameEvent::RespawnEvent { .. } => {
+                                                    self.world_state.handle_game_event(&game_event);
+                                                }
                             }
                         }
                         #[allow(unreachable_patterns)]
@@ -1286,6 +1292,7 @@ mod wasm_impl {
             let cmd = InputCommand {
                 tick,
                 actions,
+                actions_mask: 0, // In Phase 1, we don't yet populate this from the UI
                 last_seen_input_tick: None,
             }
             .clamped();
