@@ -872,14 +872,14 @@ mod wasm_impl {
                                     );
                                     self.world_state.system_manifest = manifest.clone();
                                 }
-                                                aetheris_protocol::events::GameEvent::Possession {
-                                                    network_id: _,
-                                                }
-                                                | aetheris_protocol::events::GameEvent::DamageEvent { .. }
-                                                | aetheris_protocol::events::GameEvent::DeathEvent { .. }
-                                                | aetheris_protocol::events::GameEvent::RespawnEvent { .. } => {
-                                                    self.world_state.handle_game_event(&game_event);
-                                                }
+                                aetheris_protocol::events::GameEvent::Possession {
+                                    network_id: _,
+                                }
+                                | aetheris_protocol::events::GameEvent::DamageEvent { .. }
+                                | aetheris_protocol::events::GameEvent::DeathEvent { .. }
+                                | aetheris_protocol::events::GameEvent::RespawnEvent { .. } => {
+                                    self.world_state.handle_game_event(&game_event);
+                                }
                             }
                         }
                         #[allow(unreachable_patterns)]
@@ -958,6 +958,7 @@ mod wasm_impl {
 
                 // 2. Advance global tick
                 self.world_state.latest_tick += 1;
+                self.world_state.simulate();
                 self.tick_accumulator -= DT_MS;
             }
 
@@ -1078,7 +1079,9 @@ mod wasm_impl {
                 cargo_ore: 0,
                 cargo_capacity: 0,
                 mining_target_id: 0,
-                padding: [0; 6],
+                combat_target_id: 0,
+                combat_flash_ticks: 0,
+                padding: [0; 3],
             };
             self.world_state.entities.insert(id, slot);
         }
@@ -1208,8 +1211,8 @@ mod wasm_impl {
             }
 
             // Bitmask actions (M1020 mapping)
-            // Bit 0: FirePrimary
-            if (actions_mask & 0x01) != 0 {
+            // Bit 2: FirePrimary (Space) - ACTION_FIRE_WEAPON
+            if (actions_mask & 0x04) != 0 {
                 actions.push(PlayerInputKind::FirePrimary);
             }
             // Bit 1: ToggleMining
@@ -1292,7 +1295,7 @@ mod wasm_impl {
             let cmd = InputCommand {
                 tick,
                 actions,
-                actions_mask: 0, // In Phase 1, we don't yet populate this from the UI
+                actions_mask,
                 last_seen_input_tick: None,
             }
             .clamped();

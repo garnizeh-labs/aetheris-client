@@ -282,6 +282,11 @@ self.onmessage = async (e) => {
             await c.start_session_net();
             console.log(`[DBG] start_session_net() returned. connState=${c.connection_state} latestTick=${c.latest_tick()}`);
         });
+    } else if (type === 'p_spawn_dummy') {
+        console.debug('[GameWorker] Spawning Training Dummy (Kind 10) at (20, 0)...');
+        withClient(async (c) => {
+            await c.playground_spawn_net(10, 20.0, 0.0, 0.0);
+        });
     } else if (type === 'request_otp') {
         try {
             if (!client) throw new Error('Client not initialized');
@@ -419,7 +424,7 @@ function computeInput(tick: number) {
     }
 
     // Specific Actions
-    if (heldKeys.has('Space')) actions_mask |= 0x01; // FirePrimary
+    if (heldKeys.has('Space')) actions_mask |= 0x04; // FirePrimary (ACTION_FIRE_WEAPON)
     if (heldKeys.has('KeyF')) actions_mask |= 0x02; // ToggleMining
 
     return { tick, move_x, move_y, actions_mask };

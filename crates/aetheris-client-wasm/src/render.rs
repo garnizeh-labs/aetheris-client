@@ -483,7 +483,17 @@ impl RenderState {
         add_primitive(
             6_u16,
             crate::render_primitives::create_projectile_mesh(),
-            [1.0, 1.0, 0.5, 1.0],
+            [1.0, 1.0, 0.5, 1.0], // Projectile Yellow
+        );
+        add_primitive(
+            7_u16,
+            crate::render_primitives::create_cube_mesh(0.4, 0.4, 0.4),
+            [0.8, 0.8, 0.2, 1.0], // Cargo Yellow
+        );
+        add_primitive(
+            10_u16,
+            crate::render_primitives::create_cube_mesh(0.8, 0.8, 0.8),
+            [1.0, 0.5, 0.0, 1.0], // Orange
         );
 
         // 4. Pipeline
@@ -1218,18 +1228,14 @@ impl RenderState {
                 .collect();
 
             for ent in &sorted_entities {
+                // Mining Beams (Sustained)
                 if ent.mining_active != 0 && ent.mining_target_id != 0 {
                     let start = Vec3::new(ent.x, ent.y, 0.0);
-
-                    // Find target by truncated ID using the optimized map
                     if let Some(target) = target_map.get(&ent.mining_target_id) {
                         let end = Vec3::new(target.x, target.y, 0.0);
-
-                        // Triple-beam effect: Core (White) + Glow (Orange)
                         let core_color = [1.0, 1.0, 1.0, 1.0];
-                        let glow_color = [1.0, 0.4, 0.0, 0.5];
+                        let glow_color = [1.0, 0.4, 0.0, 0.5]; // Orange glow
 
-                        // 1. Core beam (precise)
                         laser_vertices.push(DebugVertex {
                             position: start.to_array(),
                             color: core_color,
@@ -1239,7 +1245,6 @@ impl RenderState {
                             color: core_color,
                         });
 
-                        // 2. Outer Glow (slightly offset for thickness)
                         let offset = 0.08;
                         laser_vertices.push(DebugVertex {
                             position: [start.x + offset, start.y + offset, 0.0],
@@ -1249,7 +1254,6 @@ impl RenderState {
                             position: [end.x + offset, end.y + offset, 0.0],
                             color: glow_color,
                         });
-
                         laser_vertices.push(DebugVertex {
                             position: [start.x - offset, start.y - offset, 0.0],
                             color: glow_color,
@@ -1260,6 +1264,13 @@ impl RenderState {
                         });
                     }
                 }
+
+                // Combat Lasers (Discrete Flashes) - Removed in favor of projectiles
+                /*
+                if ent.combat_flash_ticks > 0 && ent.combat_target_id != 0 {
+                    ...
+                }
+                */
             }
 
             if !laser_vertices.is_empty() {

@@ -151,7 +151,9 @@ impl WorldState for ClientWorld {
                     cargo_capacity: 0,
                     mining_target_id: 0,
                     mining_active: 0,
-                    padding: [0; 6],
+                    combat_target_id: 0,
+                    combat_flash_ticks: 0,
+                    padding: [0; 3],
                 }
             });
 
@@ -189,6 +191,11 @@ impl WorldState for ClientWorld {
             slot.dy *= drag_factor;
             slot.x += slot.dx * DT;
             slot.y += slot.dy * DT;
+
+            // Visual Effect timers
+            if slot.combat_flash_ticks > 0 {
+                slot.combat_flash_ticks -= 1;
+            }
 
             // Toroidal wrapping (Sandbox/Prediction)
             if let Some(bounds) = self.room_bounds {
@@ -260,6 +267,8 @@ impl WorldState for ClientWorld {
             slot.mining_active.hash(&mut hasher);
             slot.cargo_ore.hash(&mut hasher);
             slot.mining_target_id.hash(&mut hasher);
+            slot.combat_target_id.hash(&mut hasher);
+            slot.combat_flash_ticks.hash(&mut hasher);
         }
 
         hasher.finish()
@@ -304,10 +313,24 @@ impl ClientWorld {
                     "[handle_game_event] Possession entity not yet in world - will apply when it arrives"
                 );
             }
-        } else if let aetheris_protocol::events::GameEvent::DamageEvent { target, amount } = event {
-            tracing::info!(?target, amount, "[handle_game_event] DamageEvent received");
-            // In a real client, this would trigger a screen shake or UI flash.
-            // For now, we rely on the component update to update the HP/Shield.
+        } else if let aetheris_protocol::events::GameEvent::DamageEvent {
+            source,
+            target,
+            amount,
+        } = event
+        {
+            tracing::info!(
+                ?source,
+                ?target,
+                amount,
+                "[handle_game_event] DamageEvent received"
+            );
+
+            // Set visual flash on the source entity
+            if let Some(slot) = self.entities.get_mut(source) {
+                slot.combat_target_id = (target.0 & 0xFFFF) as u16;
+                slot.combat_flash_ticks = 10; // Show for 10 ticks (approx 160ms)
+            }
         } else if let aetheris_protocol::events::GameEvent::DeathEvent { target } = event {
             tracing::info!(?target, "[handle_game_event] DeathEvent received");
             // Despawn will happen when the server stops replicating the entity,

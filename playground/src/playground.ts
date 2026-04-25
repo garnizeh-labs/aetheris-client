@@ -336,6 +336,17 @@ class AetherisPlayground {
             }
         });
 
+        shortcuts.register({
+            key: 'G',
+            namespace: 'game',
+            label: 'Spawn Training Dummy',
+            category: 'Game',
+            handler: () => {
+                console.log('[Playground] Spawning training dummy...');
+                this.gameWorker.postMessage({ type: 'p_spawn_dummy' });
+            }
+        });
+
         // Game-forwarding catchall: handled separately via a raw listener
         // so we can forward arbitrary keys without registering every possible key.
         window.addEventListener('keydown', (e) => {
@@ -654,8 +665,15 @@ class AetherisPlayground {
         this.updateEntityCount();
     }
 
+    /** Spawns a training dummy in front of the player. */
+    spawnDummy() {
+        console.log('[Playground] Spawning training dummy via button...');
+        this.gameWorker.postMessage({ type: 'p_spawn_dummy' });
+    }
+
     private updateSessionUI() {
         const btn = document.getElementById('btn-start');
+        const spawnBtn = document.getElementById('btn-spawn-dummy');
         if (!btn) return;
 
         if (this.isSessionActive) {
@@ -663,11 +681,13 @@ class AetherisPlayground {
             btn.classList.add('danger');
             btn.classList.remove('primary');
             btn.style.display = 'block';
+            if (spawnBtn) spawnBtn.style.display = 'block';
         } else {
             btn.innerText = 'Start Session (Spawn Ship)';
             btn.classList.add('primary');
             btn.classList.remove('danger');
             btn.style.display = 'block';
+            if (spawnBtn) spawnBtn.style.display = 'none';
         }
     }
 

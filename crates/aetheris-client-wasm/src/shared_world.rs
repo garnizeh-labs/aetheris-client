@@ -56,8 +56,12 @@ pub struct SabSlot {
     pub cargo_capacity: u16, // Offset 46, size 2
     /// Network ID of the mining target (truncated to 16-bit for Phase 1).
     pub mining_target_id: u16, // Offset 48, size 2
+    /// Network ID of the combat target (truncated to 16-bit for Phase 1).
+    pub combat_target_id: u16, // Offset 50, size 2
+    /// Number of frames to display the combat laser flash.
+    pub combat_flash_ticks: u8, // Offset 52, size 1
     /// Padding to maintain 8-byte alignment (`SabSlot` size: 56 bytes).
-    pub padding: [u8; 6], // Offset 50, size 6
+    pub padding: [u8; 3], // Offset 53, size 3
 }
 
 /// The header for the `SharedArrayBuffer`.
