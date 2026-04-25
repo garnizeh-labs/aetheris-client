@@ -49,7 +49,6 @@ dependencies = [
 [[package]]
 name = "aetheris-encoder-serde"
 version = "0.2.20"
-source = "git+https://github.com/garnizeh-labs/aetheris-protocol?rev=b1cfc67a994bde13779ebdcbc1a8356e40b9b216#b1cfc67a994bde13779ebdcbc1a8356e40b9b216"
 dependencies = [
  "aetheris-protocol",
  "metrics",
@@ -61,7 +60,6 @@ dependencies = [
 [[package]]
 name = "aetheris-protocol"
 version = "0.2.20"
-source = "git+https://github.com/garnizeh-labs/aetheris-protocol?rev=b1cfc67a994bde13779ebdcbc1a8356e40b9b216#b1cfc67a994bde13779ebdcbc1a8356e40b9b216"
 dependencies = [
  "async-trait",
  "serde",
@@ -2428,4 +2426,3 @@ checksum = "b8848ee67ecc8aedbaf3e4122217aff892639231befc6a1b58d29fff4c2cabaa"
 [[patch.unused]]
 name = "aetheris-encoder-bitpack"
 version = "0.2.20"
-source = "git+https://github.com/garnizeh-labs/aetheris-protocol?rev=b1cfc67a994bde13779ebdcbc1a8356e40b9b216#b1cfc67a994bde13779ebdcbc1a8356e40b9b216"

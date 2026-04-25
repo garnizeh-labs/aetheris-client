@@ -304,6 +304,16 @@ impl ClientWorld {
                     "[handle_game_event] Possession entity not yet in world - will apply when it arrives"
                 );
             }
+        } else if let aetheris_protocol::events::GameEvent::DamageEvent { target, amount } = event {
+            tracing::info!(?target, amount, "[handle_game_event] DamageEvent received");
+            // In a real client, this would trigger a screen shake or UI flash.
+            // For now, we rely on the component update to update the HP/Shield.
+        } else if let aetheris_protocol::events::GameEvent::DeathEvent { target } = event {
+            tracing::info!(?target, "[handle_game_event] DeathEvent received");
+            // Despawn will happen when the server stops replicating the entity,
+            // but we can mark it as dead or play an explosion VFX here.
+        } else if let aetheris_protocol::events::GameEvent::RespawnEvent { target, x, y } = event {
+            tracing::info!(?target, x, y, "[handle_game_event] RespawnEvent received");
         }
     }
 
@@ -320,6 +330,13 @@ impl ClientWorld {
                     && entry.entity_type == 0
                 {
                     entry.entity_type = 5;
+                }
+            }
+            aetheris_protocol::types::SHIELD_POOL_KIND => self.handle_shield_pool_update(update),
+            aetheris_protocol::types::HULL_POOL_KIND => self.handle_hull_pool_update(update),
+            aetheris_protocol::types::CARGO_DROP_KIND => {
+                if let Some(entry) = self.entities.get_mut(&update.network_id) {
+                    entry.entity_type = 6;
                 }
             }
             aetheris_protocol::types::ROOM_BOUNDS_KIND => self.handle_room_bounds_update(update),
@@ -503,6 +520,34 @@ impl ClientWorld {
             let mut sw = unsafe { crate::shared_world::SharedWorld::from_ptr(ptr_val as *mut u8) };
             sw.set_room_bounds(bounds.min_x, bounds.min_y, bounds.max_x, bounds.max_y);
             self.room_bounds = Some(bounds);
+        }
+    }
+
+    fn handle_shield_pool_update(&mut self, update: &ComponentUpdate) {
+        use aetheris_protocol::types::ShieldPool;
+        match rmp_serde::from_slice::<ShieldPool>(&update.payload) {
+            Ok(pool) => {
+                if let Some(entry) = self.entities.get_mut(&update.network_id) {
+                    entry.shield = pool.current;
+                }
+            }
+            Err(e) => {
+                tracing::warn!(network_id = update.network_id.0, error = ?e, "Failed to decode ShieldPool");
+            }
+        }
+    }
+
+    fn handle_hull_pool_update(&mut self, update: &ComponentUpdate) {
+        use aetheris_protocol::types::HullPool;
+        match rmp_serde::from_slice::<HullPool>(&update.payload) {
+            Ok(pool) => {
+                if let Some(entry) = self.entities.get_mut(&update.network_id) {
+                    entry.hp = pool.current;
+                }
+            }
+            Err(e) => {
+                tracing::warn!(network_id = update.network_id.0, error = ?e, "Failed to decode HullPool");
+            }
         }
     }
 }
