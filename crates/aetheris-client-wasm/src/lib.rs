@@ -288,6 +288,24 @@ mod wasm_impl {
         }
 
         #[wasm_bindgen]
+        pub fn set_view_state(&mut self, state: u32) {
+            use crate::render::ViewState;
+            let state = match state {
+                0 => ViewState::Logo,
+                1 => ViewState::Roaming,
+                2 => ViewState::Entering,
+                3 => ViewState::Playing,
+                _ => return,
+            };
+
+            if let Some(rs) = &mut self.render_state {
+                rs.set_view_state(state);
+            } else {
+                tracing::warn!("set_view_state called but render_state is None");
+            }
+        }
+
+        #[wasm_bindgen]
         pub async fn request_otp(base_url: String, email: String) -> Result<String, String> {
             crate::auth::request_otp(base_url, email).await
         }

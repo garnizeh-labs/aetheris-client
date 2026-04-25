@@ -117,5 +117,10 @@ self.onmessage = async (e) => {
         } else {
             console.error('[RenderWorker] Client not initialized');
         }
+    } else if (type === 'set_view_state') {
+        const { state } = payload;
+        if (client) {
+            client.set_view_state(state);
+        }
     }
 };

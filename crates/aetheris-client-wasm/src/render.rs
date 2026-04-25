@@ -230,6 +230,14 @@ pub struct Primitive {
     color: [f32; 4],
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ViewState {
+    Logo,
+    Roaming,
+    Entering,
+    Playing,
+}
+
 /// The state of the render worker.
 pub struct RenderState {
     device: Arc<Device>,
@@ -279,6 +287,12 @@ pub struct RenderState {
     // Visual effects state
     speed_shake_enabled: bool,
     latest_player_speed: f32,
+
+    // M10156 — Entry Flow & Roaming (cinematic sequence)
+    view_state: ViewState,
+    roaming_timer: f32,
+    entering_timer: f32,
+    arrival_ship_alpha: f32,
 }
 
 impl RenderState {
@@ -785,6 +799,10 @@ impl RenderState {
             last_frame_time: crate::performance_now(),
             speed_shake_enabled: true,
             latest_player_speed: 0.0,
+            view_state: ViewState::Logo,
+            roaming_timer: 0.0,
+            entering_timer: 0.0,
+            arrival_ship_alpha: 0.0,
         })
     }
 
@@ -817,6 +835,25 @@ impl RenderState {
     #[cfg(debug_assertions)]
     pub fn toggle_grid(&mut self) {
         self.debug_grid.cycle();
+    }
+
+    /// Update the view state (M10156)
+    pub fn set_view_state(&mut self, state: ViewState) {
+        tracing::info!(
+            "Render ViewState transition: {:?} -> {:?}",
+            self.view_state,
+            state
+        );
+        self.view_state = state;
+
+        // Reset timers on transition
+        if state == ViewState::Roaming {
+            self.roaming_timer = 0.0;
+        }
+        if state == ViewState::Entering {
+            self.entering_timer = 0.0;
+            self.arrival_ship_alpha = 0.0;
+        }
     }
 
     pub fn set_clear_color(&mut self, color: wgpu::Color) {
@@ -888,36 +925,75 @@ impl RenderState {
             count.set(current + 1);
         });
 
-        // Smooth camera follow (lerp)
-        // Using frame-rate independent lerp: 1 - exp(-lambda * dt)
-        let camera_lambda = 30.0;
-        let lerp_factor = (1.0 - (-camera_lambda * dt).exp()).clamp(0.0, 1.0);
+        // 1. Update Camera Position (Smooth Follow)
+        let lerp_factor = (1.0 - (-15.0 * dt).exp()).clamp(0.0, 1.0);
 
         let world_width = self.room_bounds.2 - self.room_bounds.0;
         let world_height = self.room_bounds.3 - self.room_bounds.1;
-        if world_width > 0.1 && world_height > 0.1 {
-            // Calculate shortest-path delta (wrap-aware)
-            let dx = ((self.camera_target.x - self.camera_current.x + world_width * 0.5)
-                .rem_euclid(world_width))
-                - world_width * 0.5;
-            let dy = ((self.camera_target.y - self.camera_current.y + world_height * 0.5)
-                .rem_euclid(world_height))
-                - world_height * 0.5;
 
-            // Apply lerp smoothing to the delta
-            self.camera_current.x += dx * lerp_factor;
-            self.camera_current.y += dy * lerp_factor;
-            self.camera_current.z = self.camera_target.z;
+        // M10156 — ViewState Camera Logic
+        match self.view_state {
+            ViewState::Logo => {
+                self.camera_target = Vec3::ZERO;
+                self.camera_zoom = 20.0;
+                self.camera_current = Vec3::ZERO;
+            }
+            ViewState::Roaming => {
+                self.roaming_timer += dt;
+                // Soft drifting motion (5x faster than original M10156 spec)
+                self.camera_target.x = (self.roaming_timer * 1.0).cos() * 8.0;
+                self.camera_target.y = (self.roaming_timer * 0.75).sin() * 6.0;
+                self.camera_zoom = 20.0;
 
-            // Normalize camera center to stay within canonical room bounds [min, max)
-            self.camera_current.x = (self.camera_current.x - self.room_bounds.0)
-                .rem_euclid(world_width)
-                + self.room_bounds.0;
-            self.camera_current.y = (self.camera_current.y - self.room_bounds.1)
-                .rem_euclid(world_height)
-                + self.room_bounds.1;
-        } else {
-            self.camera_current = self.camera_current.lerp(self.camera_target, lerp_factor);
+                // No wrap-around during roaming drift
+                self.camera_current = self
+                    .camera_current
+                    .lerp(self.camera_target, lerp_factor * 0.5);
+            }
+            ViewState::Entering => {
+                self.entering_timer += dt;
+                let anim_duration = 2.5; // seconds
+
+                // 1. Stabilize camera
+                self.camera_target = Vec3::ZERO;
+                self.camera_zoom = 15.0;
+                self.camera_current = self.camera_current.lerp(self.camera_target, lerp_factor);
+
+                // 2. Animate ship arrival (visual only)
+                // Start arrival after 0.5s of camera stabilization
+                if self.entering_timer > 0.5 {
+                    let ship_t = ((self.entering_timer - 0.5) / (anim_duration - 1.0)).min(1.0);
+                    // Ease out quadratic
+                    let ship_ease = 1.0 - (1.0 - ship_t) * (1.0 - ship_t);
+                    self.arrival_ship_alpha = ship_ease;
+                }
+            }
+            ViewState::Playing => {
+                if world_width > 0.1 && world_height > 0.1 {
+                    // Calculate shortest-path delta (wrap-aware)
+                    let dx = ((self.camera_target.x - self.camera_current.x + world_width * 0.5)
+                        .rem_euclid(world_width))
+                        - world_width * 0.5;
+                    let dy = ((self.camera_target.y - self.camera_current.y + world_height * 0.5)
+                        .rem_euclid(world_height))
+                        - world_height * 0.5;
+
+                    // Apply lerp smoothing to the delta
+                    self.camera_current.x += dx * lerp_factor;
+                    self.camera_current.y += dy * lerp_factor;
+                    self.camera_current.z = self.camera_target.z;
+
+                    // Normalize camera center to stay within canonical room bounds [min, max)
+                    self.camera_current.x = (self.camera_current.x - self.room_bounds.0)
+                        .rem_euclid(world_width)
+                        + self.room_bounds.0;
+                    self.camera_current.y = (self.camera_current.y - self.room_bounds.1)
+                        .rem_euclid(world_height)
+                        + self.room_bounds.1;
+                } else {
+                    self.camera_current = self.camera_current.lerp(self.camera_target, lerp_factor);
+                }
+            }
         }
 
         // 2. Update Camera Uniform
@@ -1006,54 +1082,42 @@ impl RenderState {
             // Batch entities by type for instanced drawing
             let mut type_batches: HashMap<u16, Vec<ObjectInstance>> = HashMap::new();
 
-            for ent in &sorted_entities {
-                if let Some(primitive) = self.primitives.get(&ent.entity_type) {
-                    let is_player = (ent.flags & 0x04) != 0;
-                    let speed = (ent.dx * ent.dx + ent.dy * ent.dy).sqrt();
+            if self.view_state == ViewState::Playing {
+                for ent in &sorted_entities {
+                    if let Some(primitive) = self.primitives.get(&ent.entity_type) {
+                        let is_player = (ent.flags & 0x04) != 0;
+                        let speed = (ent.dx * ent.dx + ent.dy * ent.dy).sqrt();
 
-                    if is_player {
-                        self.latest_player_speed = speed;
-                    }
-
-                    // Speed Effects (Shake & Blur)
-                    // Start effect at 80% of DEFAULT_MAX_VELOCITY (100.0)
-                    let speed_ratio = ((speed - 80.0) / 20.0).clamp(0.0, 1.0);
-
-                    if is_player && speed_ratio > 0.0 {
-                        // 1. Trail Blur (After-images)
-                        // We draw 2 faint trails behind the ship along its negative velocity vector.
-                        // TODO: [VS-02] Replace this with a proper post-processing motion blur shader.
-                        for i in 1..=2 {
-                            let trail_offset = -Vec3::new(ent.dx, ent.dy, 0.0) * (0.01 * i as f32);
-                            let trail_alpha = 0.4 / (i as f32);
-                            let mut trail_color = primitive.color;
-                            trail_color[3] *= trail_alpha * speed_ratio;
-
-                            let trail_matrix =
-                                Mat4::from_translation(Vec3::new(ent.x, ent.y, 0.0) + trail_offset)
-                                    * Mat4::from_rotation_z(ent.rotation);
-
-                            type_batches
-                                .entry(ent.entity_type)
-                                .or_default()
-                                .push(ObjectInstance {
-                                    model_matrix: trail_matrix.to_cols_array(),
-                                    color: trail_color,
-                                });
+                        if is_player {
+                            self.latest_player_speed = speed;
                         }
 
-                        // Add the main instance (no per-entity shake anymore, it's global)
-                        let model_matrix = Mat4::from_translation(Vec3::new(ent.x, ent.y, 0.0))
-                            * Mat4::from_rotation_z(ent.rotation);
+                        // Speed Effects (Shake & Blur)
+                        // Start effect at 80% of DEFAULT_MAX_VELOCITY (100.0)
+                        let speed_ratio = ((speed - 80.0) / 20.0).clamp(0.0, 1.0);
 
-                        type_batches
-                            .entry(ent.entity_type)
-                            .or_default()
-                            .push(ObjectInstance {
-                                model_matrix: model_matrix.to_cols_array(),
-                                color: primitive.color,
-                            });
-                    } else {
+                        if is_player && speed_ratio > 0.0 {
+                            // 1. Trail Blur (After-images)
+                            for i in 1..=2 {
+                                let trail_offset =
+                                    -Vec3::new(ent.dx, ent.dy, 0.0) * (0.01 * i as f32);
+                                let trail_alpha = 0.4 / (i as f32);
+                                let mut trail_color = primitive.color;
+                                trail_color[3] *= trail_alpha * speed_ratio;
+
+                                let trail_matrix = Mat4::from_translation(
+                                    Vec3::new(ent.x, ent.y, 0.0) + trail_offset,
+                                ) * Mat4::from_rotation_z(ent.rotation);
+
+                                type_batches.entry(ent.entity_type).or_default().push(
+                                    ObjectInstance {
+                                        model_matrix: trail_matrix.to_cols_array(),
+                                        color: trail_color,
+                                    },
+                                );
+                            }
+                        }
+
                         // Normal drawing
                         let model_matrix = Mat4::from_translation(Vec3::new(ent.x, ent.y, 0.0))
                             * Mat4::from_rotation_z(ent.rotation);
@@ -1065,6 +1129,32 @@ impl RenderState {
                                 model_matrix: model_matrix.to_cols_array(),
                                 color: primitive.color,
                             });
+                    }
+                }
+            } else if self.view_state == ViewState::Entering {
+                // Render the "Arrival Ship" (visual only)
+                if let Some(primitive) = self.primitives.get(&1) {
+                    // Interceptor
+                    let alpha = self.arrival_ship_alpha;
+                    if alpha > 0.01 {
+                        // Ship arrives from bottom-right (20, -20) to (0,0)
+                        let start_pos = Vec3::new(20.0, -20.0, 0.0);
+                        let end_pos = Vec3::ZERO;
+                        let current_pos = start_pos.lerp(end_pos, alpha);
+
+                        // Rotate towards center (static for now or based on path)
+                        let rotation = std::f32::consts::PI * 0.75; // Pointing towards top-left roughly
+
+                        let mut color = primitive.color;
+                        color[3] *= alpha; // Fade in
+
+                        let model_matrix =
+                            Mat4::from_translation(current_pos) * Mat4::from_rotation_z(rotation);
+
+                        type_batches.entry(1).or_default().push(ObjectInstance {
+                            model_matrix: model_matrix.to_cols_array(),
+                            color,
+                        });
                     }
                 }
             }
