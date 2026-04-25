@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.22](https://github.com/garnizeh-labs/aetheris-client/compare/aetheris-client-wasm-v0.3.20...aetheris-client-wasm-v0.3.22) - 2026-04-25
+
+### Added
+
+- *(client)* orchestrate cinematic entry flow with ViewState transitions and ship arrival animations (M10156)
+- *(client)* implement WASM telemetry and rendering refinements
+
+### Other
+
+- release v0.3.21
+
 ## [0.3.21](https://github.com/garnizeh-labs/aetheris-client/compare/aetheris-client-wasm-v0.3.20...aetheris-client-wasm-v0.3.21) - 2026-04-25
 
 ### Added
