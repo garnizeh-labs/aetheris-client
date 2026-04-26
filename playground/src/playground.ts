@@ -349,12 +349,7 @@ class AetherisPlayground {
             label: 'Spawn Training Dummy',
             category: 'Game',
             handler: () => {
-                if (!this.isSessionActive) {
-                    console.warn('[Playground] Cannot spawn dummy: session not active');
-                    return;
-                }
-                console.log('[Playground] Spawning training dummy...');
-                this.gameWorker.postMessage({ type: 'p_spawn_dummy' });
+                this.spawnDummy();
             }
         });
 
@@ -685,7 +680,7 @@ class AetherisPlayground {
             console.warn('[Playground] Cannot spawn dummy: session not active');
             return;
         }
-        console.log('[Playground] Spawning training dummy via button...');
+        console.log('[Playground] Spawning training dummy...');
         this.gameWorker.postMessage({ type: 'p_spawn_dummy' });
     }
 
