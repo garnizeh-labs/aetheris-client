@@ -656,6 +656,8 @@ mod wasm_impl {
             }
 
             // 1. Poll Network
+            let mut collected_game_events = Vec::new();
+
             if let Some(transport) = &mut self.transport {
                 let events = match transport.poll_events().await {
                     Ok(e) => e,
@@ -666,7 +668,6 @@ mod wasm_impl {
                 };
                 let mut updates: Vec<(ClientId, aetheris_protocol::events::ComponentUpdate)> =
                     Vec::new();
-                let mut collected_game_events = Vec::new();
 
                 for event in events {
                     match event {
