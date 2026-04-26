@@ -920,12 +920,12 @@ class AetherisPlayground {
             typeEl.className = 'entity-type';
             typeEl.textContent = `${label} ${entity.is_player ? '(YOU)' : ''}`;
 
-            const idEl = document.createElement('span');
-            idEl.className = 'entity-id';
-            idEl.textContent = `#${entity.network_id}`;
+            const idElement = document.createElement('span');
+            idElement.className = 'entity-id';
+            idElement.textContent = `#${entity.network_id}`;
 
             header.appendChild(typeEl);
-            header.appendChild(idEl);
+            header.appendChild(idElement);
             item.appendChild(header);
 
             const vitals = document.createElement('div');
