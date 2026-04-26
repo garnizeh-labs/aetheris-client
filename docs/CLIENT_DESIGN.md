@@ -178,7 +178,38 @@ See [PRIORITY_CHANNELS_DESIGN.md §8](https://github.com/garnizeh-labs/aetheris-
 
 ### 3.6 Authoritative Entity Definitions
 
-To ensure UI consistency and early prediction accuracy, the client relies on the protocol's centralized entity definitions. The Game Worker uses `aetheris_protocol::types::get_default_stats()` to determine the maximum HP and Shield values for ships before the server's authoritative `ShipStats` component arrives. This prevents UI "flicker" where a health bar might momentarily appear empty or at a default 100/100 before the true stats are synced.
+To ensure UI consistency and early prediction accuracy, the client relies on the protocol's centralized entity definitions. This allows the client to render correct ship models and health bars immediately upon entity spawn, even before the authoritative `ShipStats` component is replicated from the server.
+
+#### 3.6.1 Static Asset Mapping
+
+The client uses the `entity_type` field in the `Transform` component to map network entities to visual assets (GLB models, textures, and particle effects). These IDs are defined as constants in the protocol.
+
+```rust
+// aetheris-protocol/src/types.rs
+pub const ENTITY_TYPE_INTERCEPTOR: u16 = 1;
+pub const ENTITY_TYPE_AI_INTERCEPTOR: u16 = 2;
+pub const ENTITY_TYPE_DREADNOUGHT: u16 = 3;
+// ...
+```
+
+#### 3.6.2 Client-Side Stat Prediction
+
+The Game Worker uses `aetheris_protocol::types::get_default_stats()` to determine the maximum HP and Shield values for ships. This prevents "UI flicker" where a health bar might momentarily appear empty or at a default 100/100 before the true server-side stats are synchronized.
+
+```rust
+// aetheris-client-wasm/src/lib.rs
+pub fn wasm_get_entity_statuses(&self) -> Vec<EntityStatus> {
+    // ...
+    let (max_hp, max_shield) = get_default_stats(transform.entity_type);
+    // ...
+}
+```
+
+#### 3.6.3 Rationale
+
+1.  **Zero-Latency Visuals**: By using protocol constants, the client can initialize the visual state of an entity in the same frame it is created.
+2.  **Cross-Repo Determinism**: Ensures the client and server never desynchronize regarding entity classifications.
+3.  **Simplified UI Logic**: UI components can rely on a stable set of default values for progress bars and labels.
 
 ### 3.5 Input History Buffer
 
