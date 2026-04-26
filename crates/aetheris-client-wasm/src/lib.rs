@@ -1055,10 +1055,11 @@ mod wasm_impl {
                 is_player: bool,
             }
 
-            let statuses: Vec<EntityStatus> = self
-                .world_state
-                .entities
-                .values()
+            let mut entities: Vec<&SabSlot> = self.world_state.entities.values().collect();
+            entities.sort_by_key(|slot| slot.network_id);
+
+            let statuses: Vec<EntityStatus> = entities
+                .into_iter()
                 .map(|slot| EntityStatus {
                     network_id: slot.network_id.to_string(),
                     hp: slot.hp,
@@ -1665,8 +1666,27 @@ mod wasm_impl {
                     // one tick before starting to move.
                     let dt = 1.0 / 60.0;
                     let remaining = 1.0 - alpha;
-                    ent.x -= ent.dx * dt * remaining;
-                    ent.y -= ent.dy * dt * remaining;
+
+                    if let Some(bounds) = &self.world_state.room_bounds {
+                        // Use wrapped logic for backward extrapolation to handle spawns near bounds
+                        ent.x = lerp_wrapped(
+                            ent.x,
+                            ent.x - ent.dx * dt * remaining,
+                            1.0,
+                            bounds.min_x,
+                            bounds.max_x,
+                        );
+                        ent.y = lerp_wrapped(
+                            ent.y,
+                            ent.y - ent.dy * dt * remaining,
+                            1.0,
+                            bounds.min_y,
+                            bounds.max_y,
+                        );
+                    } else {
+                        ent.x -= ent.dx * dt * remaining;
+                        ent.y -= ent.dy * dt * remaining;
+                    }
                     ent.z -= ent.dz * dt * remaining;
                 }
             }

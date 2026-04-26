@@ -1135,7 +1135,7 @@ impl RenderState {
                             * Mat4::from_scale(Vec3::splat(scale));
 
                         if ent.entity_type == 20 {
-                            tracing::info!(
+                            tracing::trace!(
                                 network_id = ent.network_id,
                                 x = ent.x,
                                 y = ent.y,

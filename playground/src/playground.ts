@@ -97,9 +97,16 @@ class AetherisPlayground {
 
         // Populate themes
         const themes = this.world.availableThemes;
-        selector.innerHTML = themes.map(t =>
-            `<option value="${t.slug}" ${t.slug === this.world.activeTheme ? 'selected' : ''}>${t.displayName}</option>`
-        ).join('');
+        selector.innerHTML = '';
+        themes.forEach(t => {
+            const option = document.createElement('option');
+            option.value = t.slug;
+            option.textContent = t.displayName;
+            if (t.slug === this.world.activeTheme) {
+                option.selected = true;
+            }
+            selector.appendChild(option);
+        });
 
         // Handle manual change
         selector.addEventListener('change', () => {
@@ -342,6 +349,10 @@ class AetherisPlayground {
             label: 'Spawn Training Dummy',
             category: 'Game',
             handler: () => {
+                if (!this.isSessionActive) {
+                    console.warn('[Playground] Cannot spawn dummy: session not active');
+                    return;
+                }
                 console.log('[Playground] Spawning training dummy...');
                 this.gameWorker.postMessage({ type: 'p_spawn_dummy' });
             }
@@ -856,7 +867,14 @@ class AetherisPlayground {
         if (!container) return;
 
         if (entities.length === 0) {
-            container.innerHTML = `<div style="font-size: 0.625rem; color: var(--text-muted); text-align: center; padding: 12px;">No active entities detected</div>`;
+            container.innerHTML = '';
+            const empty = document.createElement('div');
+            empty.style.fontSize = '0.625rem';
+            empty.style.color = 'var(--text-muted)';
+            empty.style.textAlign = 'center';
+            empty.style.padding = '12px';
+            empty.textContent = 'No active entities detected';
+            container.appendChild(empty);
             return;
         }
 
@@ -885,45 +903,89 @@ class AetherisPlayground {
             }
         };
 
-        // Efficient DOM update: instead of re-creating everything, we can use a fragment or 
-        // simple innerHTML if it's not too frequent. Since it's every 1s, innerHTML is fine.
-        let html = '';
+        // Build list via DOM API to avoid XSS vulnerabilities (mirroring updateSystemManifest)
+        container.innerHTML = '';
         for (const entity of displayEntities) {
             const label = getEntityLabel(entity.entity_type);
             const hpPercent = Math.min(100, Math.max(0, (entity.hp / 100) * 100));
             const shieldPercent = Math.min(100, Math.max(0, (entity.shield / 100) * 100));
-            
-            html += `
-                <div class="entity-item ${entity.is_player ? 'is-player' : ''}">
-                    <div class="entity-item-header">
-                        <span class="entity-type">${label} ${entity.is_player ? '(YOU)' : ''}</span>
-                        <span class="entity-id">#${entity.network_id}</span>
-                    </div>
-                    <div class="vitals-container">
-                        <div class="vital-row">
-                            <span class="vital-label">Hull</span>
-                            <div class="progress-bg">
-                                <div class="progress-fill hp-fill" style="width: ${hpPercent}%"></div>
-                            </div>
-                            <span class="vital-value">${entity.hp}</span>
-                        </div>
-                        <div class="vital-row">
-                            <span class="vital-label">Shield</span>
-                            <div class="progress-bg">
-                                <div class="progress-fill shield-fill" style="width: ${shieldPercent}%"></div>
-                            </div>
-                            <span class="vital-value">${entity.shield}</span>
-                        </div>
-                    </div>
-                </div>
-            `;
-        }
-        
-        if (entities.length > 20) {
-            html += `<div style="font-size: 0.5rem; color: var(--text-muted); text-align: center; padding: 4px;">+ ${entities.length - 20} more entities hidden</div>`;
+
+            const item = document.createElement('div');
+            item.className = `entity-item ${entity.is_player ? 'is-player' : ''}`;
+
+            const header = document.createElement('div');
+            header.className = 'entity-item-header';
+
+            const typeEl = document.createElement('span');
+            typeEl.className = 'entity-type';
+            typeEl.textContent = `${label} ${entity.is_player ? '(YOU)' : ''}`;
+
+            const idEl = document.createElement('span');
+            idEl.className = 'entity-id';
+            idEl.textContent = `#${entity.network_id}`;
+
+            header.appendChild(typeEl);
+            header.appendChild(idEl);
+            item.appendChild(header);
+
+            const vitals = document.createElement('div');
+            vitals.className = 'vitals-container';
+
+            // HP Row
+            const hpRow = document.createElement('div');
+            hpRow.className = 'vital-row';
+            const hpLabel = document.createElement('span');
+            hpLabel.className = 'vital-label';
+            hpLabel.textContent = 'Hull';
+            const hpProgressBg = document.createElement('div');
+            hpProgressBg.className = 'progress-bg';
+            const hpProgressFill = document.createElement('div');
+            hpProgressFill.className = 'progress-fill hp-fill';
+            hpProgressFill.style.width = `${hpPercent}%`;
+            const hpVal = document.createElement('span');
+            hpVal.className = 'vital-value';
+            hpVal.textContent = String(entity.hp);
+
+            hpProgressBg.appendChild(hpProgressFill);
+            hpRow.appendChild(hpLabel);
+            hpRow.appendChild(hpProgressBg);
+            hpRow.appendChild(hpVal);
+            vitals.appendChild(hpRow);
+
+            // Shield Row
+            const shieldRow = document.createElement('div');
+            shieldRow.className = 'vital-row';
+            const shieldLabel = document.createElement('span');
+            shieldLabel.className = 'vital-label';
+            shieldLabel.textContent = 'Shield';
+            const shieldProgressBg = document.createElement('div');
+            shieldProgressBg.className = 'progress-bg';
+            const shieldProgressFill = document.createElement('div');
+            shieldProgressFill.className = 'progress-fill shield-fill';
+            shieldProgressFill.style.width = `${shieldPercent}%`;
+            const shieldVal = document.createElement('span');
+            shieldVal.className = 'vital-value';
+            shieldVal.textContent = String(entity.shield);
+
+            shieldProgressBg.appendChild(shieldProgressFill);
+            shieldRow.appendChild(shieldLabel);
+            shieldRow.appendChild(shieldProgressBg);
+            shieldRow.appendChild(shieldVal);
+            vitals.appendChild(shieldRow);
+
+            item.appendChild(vitals);
+            container.appendChild(item);
         }
 
-        container.innerHTML = html;
+        if (entities.length > 20) {
+            const more = document.createElement('div');
+            more.style.fontSize = '0.5rem';
+            more.style.color = 'var(--text-muted)';
+            more.style.textAlign = 'center';
+            more.style.padding = '4px';
+            more.textContent = `+ ${entities.length - 20} more entities hidden`;
+            container.appendChild(more);
+        }
     }
 
     requestOtp(email: string) {
