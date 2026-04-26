@@ -1069,7 +1069,15 @@ mod wasm_impl {
                 })
                 .collect();
 
-            serde_wasm_bindgen::to_value(&statuses).unwrap_or(JsValue::NULL)
+            match serde_wasm_bindgen::to_value(&statuses) {
+                Ok(val) => val,
+                Err(e) => {
+                    web_sys::console::warn_1(&wasm_bindgen::JsValue::from_str(&format!(
+                        "wasm_get_entity_statuses: serde_wasm_bindgen::to_value failed: {e}"
+                    )));
+                    wasm_bindgen::JsValue::NULL
+                }
+            }
         }
 
         #[wasm_bindgen]

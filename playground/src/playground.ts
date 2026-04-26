@@ -681,6 +681,10 @@ class AetherisPlayground {
 
     /** Spawns a training dummy in front of the player. */
     spawnDummy() {
+        if (!this.isSessionActive) {
+            console.warn('[Playground] Cannot spawn dummy: session not active');
+            return;
+        }
         console.log('[Playground] Spawning training dummy via button...');
         this.gameWorker.postMessage({ type: 'p_spawn_dummy' });
     }
