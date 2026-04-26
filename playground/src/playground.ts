@@ -906,8 +906,10 @@ class AetherisPlayground {
         container.innerHTML = '';
         for (const entity of displayEntities) {
             const label = getEntityLabel(entity.entity_type);
-            const hpPercent = Math.min(100, Math.max(0, (entity.hp / 100) * 100));
-            const shieldPercent = Math.min(100, Math.max(0, (entity.shield / 100) * 100));
+            const hpPercent = Math.min(100, Math.max(0, (entity.hp / entity.max_hp) * 100));
+            const shieldPercent = entity.max_shield > 0 
+                ? Math.min(100, Math.max(0, (entity.shield / entity.max_shield) * 100))
+                : 0;
 
             const item = document.createElement('div');
             item.className = `entity-item ${entity.is_player ? 'is-player' : ''}`;
