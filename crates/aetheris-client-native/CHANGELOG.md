@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.24](https://github.com/garnizeh-labs/aetheris-client/compare/aetheris-client-native-v0.3.23...aetheris-client-native-v0.3.24) - 2026-04-26
+
+### Other
+
+- update Cargo.lock dependencies
+
 ## [0.3.22](https://github.com/garnizeh-labs/aetheris-client/compare/aetheris-client-native-v0.3.21...aetheris-client-native-v0.3.22) - 2026-04-25
 
 ### Other

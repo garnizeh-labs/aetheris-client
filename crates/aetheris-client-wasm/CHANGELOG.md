@@ -7,6 +7,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.24](https://github.com/garnizeh-labs/aetheris-client/compare/aetheris-client-wasm-v0.3.22...aetheris-client-wasm-v0.3.24) - 2026-04-26
+
+### Added
+
+- *(client)* implement entity status panel and improved playground input
+- *(vs-01)* finalize combat loop stabilization and determinism hardening
+- *(client)* map HP/Shield pools and handle combat events (VS-03)
+
+### Fixed
+
+- add session activity check to spawnDummy and handle serialization errors in get_entity_statuses
+- *(client)* resolve non-exhaustive matches and missing fields after protocol update
+
+### Other
+
+- release v0.3.23
+- improve entity handling with wrapped extrapolation and secure DOM manipulation in playground UI
+
 ## [0.3.23](https://github.com/garnizeh-labs/aetheris-client/compare/aetheris-client-wasm-v0.3.22...aetheris-client-wasm-v0.3.23) - 2026-04-26
 
 ### Added
