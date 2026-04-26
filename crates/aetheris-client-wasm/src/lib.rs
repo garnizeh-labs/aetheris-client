@@ -179,6 +179,7 @@ mod wasm_impl {
         playground_move_y: f32,
         playground_actions: u32,
         last_fraction: f32,
+        last_actions_mask: u32,
     }
 
     #[wasm_bindgen]
@@ -284,6 +285,7 @@ mod wasm_impl {
                 playground_move_y: 0.0,
                 playground_actions: 0,
                 last_fraction: 0.0,
+                last_actions_mask: 0,
             })
         }
 
@@ -713,7 +715,11 @@ mod wasm_impl {
                                                 }
                                                 aetheris_protocol::events::GameEvent::Possession {
                                                     network_id: _,
-                                                } => {
+                                                }
+                                                | aetheris_protocol::events::GameEvent::DamageEvent { .. }
+                                                | aetheris_protocol::events::GameEvent::DeathEvent { .. }
+                                                | aetheris_protocol::events::GameEvent::RespawnEvent { .. }
+                                                | aetheris_protocol::events::GameEvent::CargoCollected { .. } => {
                                                     self.world_state.handle_game_event(&game_event);
                                                 }
                                                 aetheris_protocol::events::GameEvent::SystemManifest {
@@ -871,7 +877,11 @@ mod wasm_impl {
                                 }
                                 aetheris_protocol::events::GameEvent::Possession {
                                     network_id: _,
-                                } => {
+                                }
+                                | aetheris_protocol::events::GameEvent::DamageEvent { .. }
+                                | aetheris_protocol::events::GameEvent::DeathEvent { .. }
+                                | aetheris_protocol::events::GameEvent::RespawnEvent { .. }
+                                | aetheris_protocol::events::GameEvent::CargoCollected { .. } => {
                                     self.world_state.handle_game_event(&game_event);
                                 }
                             }
@@ -952,6 +962,7 @@ mod wasm_impl {
 
                 // 2. Advance global tick
                 self.world_state.latest_tick += 1;
+                self.world_state.simulate();
                 self.tick_accumulator -= DT_MS;
             }
 
@@ -1034,6 +1045,42 @@ mod wasm_impl {
         }
 
         #[wasm_bindgen]
+        pub fn wasm_get_entity_statuses(&self) -> JsValue {
+            #[derive(serde::Serialize)]
+            struct EntityStatus {
+                network_id: String,
+                hp: u16,
+                shield: u16,
+                entity_type: u16,
+                is_player: bool,
+            }
+
+            let mut entities: Vec<&SabSlot> = self.world_state.entities.values().collect();
+            entities.sort_by_key(|slot| slot.network_id);
+
+            let statuses: Vec<EntityStatus> = entities
+                .into_iter()
+                .map(|slot| EntityStatus {
+                    network_id: slot.network_id.to_string(),
+                    hp: slot.hp,
+                    shield: slot.shield,
+                    entity_type: slot.entity_type,
+                    is_player: (slot.flags & 0x04) != 0,
+                })
+                .collect();
+
+            match serde_wasm_bindgen::to_value(&statuses) {
+                Ok(val) => val,
+                Err(e) => {
+                    web_sys::console::warn_1(&wasm_bindgen::JsValue::from_str(&format!(
+                        "wasm_get_entity_statuses: serde_wasm_bindgen::to_value failed: {e}"
+                    )));
+                    wasm_bindgen::JsValue::NULL
+                }
+            }
+        }
+
+        #[wasm_bindgen]
         pub fn playground_spawn(&mut self, entity_type: u16, x: f32, y: f32, rotation: f32) {
             // Security: Prevent overflow in playground mode
             if self.world_state.entities.len() >= MAX_ENTITIES {
@@ -1072,7 +1119,9 @@ mod wasm_impl {
                 cargo_ore: 0,
                 cargo_capacity: 0,
                 mining_target_id: 0,
-                padding: [0; 6],
+                combat_target_id: 0,
+                combat_flash_ticks: 0,
+                padding: [0; 3],
             };
             self.world_state.entities.insert(id, slot);
         }
@@ -1202,12 +1251,12 @@ mod wasm_impl {
             }
 
             // Bitmask actions (M1020 mapping)
-            // Bit 0: FirePrimary
-            if (actions_mask & 0x01) != 0 {
+            // Bit 2: FirePrimary (Space) - ACTION_FIRE_WEAPON
+            if (actions_mask & 0x04) != 0 {
                 actions.push(PlayerInputKind::FirePrimary);
             }
-            // Bit 1: ToggleMining
-            if (actions_mask & 0x02) != 0 {
+            // Bit 1: ToggleMining (Edge-triggered)
+            if (actions_mask & 0x02) != 0 && (self.last_actions_mask & 0x02) == 0 {
                 let target = if let Some(id) = target_id_arg {
                     Some(NetworkId(id))
                 } else {
@@ -1240,6 +1289,8 @@ mod wasm_impl {
                     );
                 }
             }
+
+            self.last_actions_mask = actions_mask;
 
             // 3. Noise reduction check
             let is_repeated = self.last_input_actions.len() == actions.len()
@@ -1286,6 +1337,7 @@ mod wasm_impl {
             let cmd = InputCommand {
                 tick,
                 actions,
+                actions_mask,
                 last_seen_input_tick: None,
             }
             .clamped();
@@ -1616,6 +1668,34 @@ mod wasm_impl {
                     }
                     ent.z = lerp(prev.z, ent.z, alpha);
                     ent.rotation = lerp_rotation(prev.rotation, ent.rotation, alpha);
+                } else {
+                    // M1013/M1020 — Extrapolate backwards for newly spawned entities.
+                    // This prevents the "blink" where an entity appears to stand still for
+                    // one tick before starting to move.
+                    let dt = 1.0 / 60.0;
+                    let remaining = 1.0 - alpha;
+
+                    if let Some(bounds) = &self.world_state.room_bounds {
+                        // Use wrapped logic for backward extrapolation to handle spawns near bounds
+                        ent.x = lerp_wrapped(
+                            ent.x,
+                            ent.x - ent.dx * dt * remaining,
+                            1.0,
+                            bounds.min_x,
+                            bounds.max_x,
+                        );
+                        ent.y = lerp_wrapped(
+                            ent.y,
+                            ent.y - ent.dy * dt * remaining,
+                            1.0,
+                            bounds.min_y,
+                            bounds.max_y,
+                        );
+                    } else {
+                        ent.x -= ent.dx * dt * remaining;
+                        ent.y -= ent.dy * dt * remaining;
+                    }
+                    ent.z -= ent.dz * dt * remaining;
                 }
             }
 

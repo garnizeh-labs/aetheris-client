@@ -482,8 +482,18 @@ impl RenderState {
         );
         add_primitive(
             6_u16,
+            crate::render_primitives::create_cube_mesh(0.4, 0.4, 0.4),
+            [0.8, 0.8, 0.2, 1.0], // Cargo Yellow
+        );
+        add_primitive(
+            20_u16,
             crate::render_primitives::create_projectile_mesh(),
-            [1.0, 1.0, 0.5, 1.0],
+            [1.0, 1.0, 0.0, 1.0], // Projectile Vibrant Neon Yellow
+        );
+        add_primitive(
+            10_u16,
+            crate::render_primitives::create_cube_mesh(0.8, 0.8, 0.8),
+            [1.0, 0.5, 0.0, 1.0], // Training Dummy Orange
         );
 
         // 4. Pipeline
@@ -1119,15 +1129,31 @@ impl RenderState {
                         }
 
                         // Normal drawing
+                        let scale = if ent.entity_type == 20 { 1.5 } else { 1.0 };
                         let model_matrix = Mat4::from_translation(Vec3::new(ent.x, ent.y, 0.0))
-                            * Mat4::from_rotation_z(ent.rotation);
+                            * Mat4::from_rotation_z(ent.rotation)
+                            * Mat4::from_scale(Vec3::splat(scale));
+
+                        if ent.entity_type == 20 {
+                            tracing::trace!(
+                                network_id = ent.network_id,
+                                x = ent.x,
+                                y = ent.y,
+                                "RENDERING PROJECTILE"
+                            );
+                        }
+
+                        let mut color = primitive.color;
+                        if ent.combat_flash_ticks > 0 {
+                            color = [1.0, 1.0, 1.0, 1.0]; // Flash white
+                        }
 
                         type_batches
                             .entry(ent.entity_type)
                             .or_default()
                             .push(ObjectInstance {
                                 model_matrix: model_matrix.to_cols_array(),
-                                color: primitive.color,
+                                color,
                             });
                     }
                 }
@@ -1218,18 +1244,14 @@ impl RenderState {
                 .collect();
 
             for ent in &sorted_entities {
+                // Mining Beams (Sustained)
                 if ent.mining_active != 0 && ent.mining_target_id != 0 {
                     let start = Vec3::new(ent.x, ent.y, 0.0);
-
-                    // Find target by truncated ID using the optimized map
                     if let Some(target) = target_map.get(&ent.mining_target_id) {
                         let end = Vec3::new(target.x, target.y, 0.0);
-
-                        // Triple-beam effect: Core (White) + Glow (Orange)
                         let core_color = [1.0, 1.0, 1.0, 1.0];
-                        let glow_color = [1.0, 0.4, 0.0, 0.5];
+                        let glow_color = [1.0, 0.4, 0.0, 0.5]; // Orange glow
 
-                        // 1. Core beam (precise)
                         laser_vertices.push(DebugVertex {
                             position: start.to_array(),
                             color: core_color,
@@ -1239,7 +1261,6 @@ impl RenderState {
                             color: core_color,
                         });
 
-                        // 2. Outer Glow (slightly offset for thickness)
                         let offset = 0.08;
                         laser_vertices.push(DebugVertex {
                             position: [start.x + offset, start.y + offset, 0.0],
@@ -1249,7 +1270,6 @@ impl RenderState {
                             position: [end.x + offset, end.y + offset, 0.0],
                             color: glow_color,
                         });
-
                         laser_vertices.push(DebugVertex {
                             position: [start.x - offset, start.y - offset, 0.0],
                             color: glow_color,
@@ -1260,6 +1280,13 @@ impl RenderState {
                         });
                     }
                 }
+
+                // Combat Lasers (Discrete Flashes) - Removed in favor of projectiles
+                /*
+                if ent.combat_flash_ticks > 0 && ent.combat_target_id != 0 {
+                    ...
+                }
+                */
             }
 
             if !laser_vertices.is_empty() {

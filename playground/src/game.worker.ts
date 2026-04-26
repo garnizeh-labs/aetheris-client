@@ -134,6 +134,9 @@ async function pollMetricsOnce(forceManifest: boolean = false) {
                 // regardless of the outgoing request throttle.
                 const manifest = (c as any).get_system_info();
 
+                // 3. Entity statuses (real-time vitals for UI panel)
+                const entities = (c as any).wasm_get_entity_statuses();
+
                 if (manifest && ((manifest instanceof Map && manifest.size > 0) || (Object.keys(manifest).length > 0))) {
                     const manifestObj = (manifest instanceof Map) ? Object.fromEntries(manifest) : (manifest as any);
 
@@ -145,12 +148,12 @@ async function pollMetricsOnce(forceManifest: boolean = false) {
                         lastLoggedManifestWorker = manifestStr;
                         // We don't log in the worker anymore to avoid redundancy with the main thread,
                         // but we still de-duplicate here to save IPC bandwidth.
-                        self.postMessage({ type: 'wasm_metrics', payload: metrics, manifest });
+                        self.postMessage({ type: 'wasm_metrics', payload: metrics, manifest, entities });
                     } else {
-                        self.postMessage({ type: 'wasm_metrics', payload: metrics });
+                        self.postMessage({ type: 'wasm_metrics', payload: metrics, entities });
                     }
                 } else {
-                    self.postMessage({ type: 'wasm_metrics', payload: metrics });
+                    self.postMessage({ type: 'wasm_metrics', payload: metrics, entities });
                 }
             });
         } else if (metrics) {
@@ -281,6 +284,11 @@ self.onmessage = async (e) => {
             console.debug('[GameWorker] Calling c.start_session_net()...');
             await c.start_session_net();
             console.log(`[DBG] start_session_net() returned. connState=${c.connection_state} latestTick=${c.latest_tick()}`);
+        });
+    } else if (type === 'p_spawn_dummy') {
+        console.debug('[GameWorker] Spawning Training Dummy (Kind 10) at (20, 0)...');
+        withClient(async (c) => {
+            await c.playground_spawn_net(10, 20.0, 0.0, 0.0);
         });
     } else if (type === 'request_otp') {
         try {
@@ -419,7 +427,7 @@ function computeInput(tick: number) {
     }
 
     // Specific Actions
-    if (heldKeys.has('Space')) actions_mask |= 0x01; // FirePrimary
+    if (heldKeys.has('Space')) actions_mask |= 0x04; // FirePrimary (ACTION_FIRE_WEAPON)
     if (heldKeys.has('KeyF')) actions_mask |= 0x02; // ToggleMining
 
     return { tick, move_x, move_y, actions_mask };

@@ -201,7 +201,13 @@ async function initEngine() {
         // Forward raw input to game worker
         window.onkeydown = (e) => {
             if (canvas.style.display === 'block') {
-                gameWorker.postMessage({ type: 'key_down', payload: { key: e.key } });
+                gameWorker.postMessage({ type: 'key_down', payload: { key: e.code } });
+            }
+        };
+
+        window.onkeyup = (e) => {
+            if (canvas.style.display === 'block') {
+                gameWorker.postMessage({ type: 'key_up', payload: { key: e.code } });
             }
         };
 

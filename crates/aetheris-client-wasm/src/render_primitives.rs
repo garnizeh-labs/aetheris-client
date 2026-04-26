@@ -248,25 +248,29 @@ pub fn create_projectile_mesh() -> MeshData {
         });
     };
 
-    let s = 0.1;
-    let l = 0.4;
-    let front = [0.0, 0.0, l];
-    let back = [0.0, 0.0, -l];
-    let right = [s, 0.0, 0.0];
-    let left = [-s, 0.0, 0.0];
-    let up = [0.0, s, 0.0];
-    let down = [0.0, -s, 0.0];
+    // Orient along X-axis (forward in Aetheris engine)
+    let l = 0.6; // Length forward
+    let b = 0.2; // Length backward
+    let s = 0.15; // Side width
 
-    // Front cone
-    add_face(front, right, up);
-    add_face(front, up, left);
-    add_face(front, left, down);
-    add_face(front, down, right);
+    let front = [l, 0.0, 0.0];
+    let back = [-b, 0.0, 0.0];
+    let left = [0.0, s, 0.0];
+    let right = [0.0, -s, 0.0];
+    let up = [0.0, 0.0, s];
+    let down = [0.0, 0.0, -s];
+
+    // Front cone (pointing +X)
+    add_face(front, up, right);
+    add_face(front, left, up);
+    add_face(front, down, left);
+    add_face(front, right, down);
+
     // Back cone
-    add_face(back, up, right);
-    add_face(back, left, up);
-    add_face(back, down, left);
-    add_face(back, right, down);
+    add_face(back, right, up);
+    add_face(back, up, left);
+    add_face(back, left, down);
+    add_face(back, down, right);
 
     let indices = (0..vertices.len() as u16).collect();
     MeshData { vertices, indices }

@@ -8,7 +8,8 @@ use aetheris_protocol::error::WorldError;
 use aetheris_protocol::events::{ComponentUpdate, ReplicationEvent};
 use aetheris_protocol::traits::WorldState;
 use aetheris_protocol::types::{
-    ClientId, ComponentKind, LocalId, NetworkId, ShipClass, ShipStats, Transform,
+    ClientId, ComponentKind, LocalId, NetworkId, PROJECTILE_MARKER_KIND, ShipClass, ShipStats,
+    Transform,
 };
 use std::collections::{BTreeMap, VecDeque};
 
@@ -151,7 +152,9 @@ impl WorldState for ClientWorld {
                     cargo_capacity: 0,
                     mining_target_id: 0,
                     mining_active: 0,
-                    padding: [0; 6],
+                    combat_target_id: 0,
+                    combat_flash_ticks: 0,
+                    padding: [0; 3],
                 }
             });
 
@@ -181,14 +184,22 @@ impl WorldState for ClientWorld {
     fn simulate(&mut self) {
         const DRAG: f32 = 1.0;
         const DT: f32 = 1.0 / 60.0;
-        let drag_factor = 1.0 / (1.0 + DRAG * DT);
 
         for slot in self.entities.values_mut() {
             // Semi-implicit Euler integration
+            // VS-03: Projectiles (Kind 20) have zero drag to avoid "stopping" visually
+            let current_drag = if slot.entity_type == 20 { 0.0 } else { DRAG };
+            let drag_factor = 1.0 / (1.0 + current_drag * DT);
+
             slot.dx *= drag_factor;
             slot.dy *= drag_factor;
             slot.x += slot.dx * DT;
             slot.y += slot.dy * DT;
+
+            // Visual Effect timers
+            if slot.combat_flash_ticks > 0 {
+                slot.combat_flash_ticks -= 1;
+            }
 
             // Toroidal wrapping (Sandbox/Prediction)
             if let Some(bounds) = self.room_bounds {
@@ -260,6 +271,8 @@ impl WorldState for ClientWorld {
             slot.mining_active.hash(&mut hasher);
             slot.cargo_ore.hash(&mut hasher);
             slot.mining_target_id.hash(&mut hasher);
+            slot.combat_target_id.hash(&mut hasher);
+            slot.combat_flash_ticks.hash(&mut hasher);
         }
 
         hasher.finish()
@@ -304,6 +317,45 @@ impl ClientWorld {
                     "[handle_game_event] Possession entity not yet in world - will apply when it arrives"
                 );
             }
+        } else if let aetheris_protocol::events::GameEvent::DamageEvent {
+            source,
+            target,
+            amount,
+        } = event
+        {
+            tracing::info!(
+                ?source,
+                ?target,
+                amount,
+                "[handle_game_event] DamageEvent received"
+            );
+
+            // Set visual flash on the source entity (firing effect)
+            if let Some(slot) = self.entities.get_mut(source) {
+                slot.combat_target_id = (target.0 & 0xFFFF) as u16;
+                slot.combat_flash_ticks = 10;
+            }
+
+            // Set visual flash on the target entity (hit effect)
+            if let Some(slot) = self.entities.get_mut(target) {
+                slot.combat_flash_ticks = 10;
+            }
+        } else if let aetheris_protocol::events::GameEvent::DeathEvent { target } = event {
+            tracing::info!(?target, "[handle_game_event] DeathEvent received");
+            // Despawn will happen when the server stops replicating the entity,
+            // but we can mark it as dead or play an explosion VFX here.
+            let _ = self.despawn_networked(*target);
+        } else if let aetheris_protocol::events::GameEvent::RespawnEvent { target, x, y } = event {
+            tracing::info!(?target, x, y, "[handle_game_event] RespawnEvent received");
+        } else if let aetheris_protocol::events::GameEvent::CargoCollected { network_id, amount } =
+            event
+        {
+            tracing::info!(
+                ?network_id,
+                amount,
+                "[handle_game_event] CargoCollected received"
+            );
+            let _ = self.despawn_networked(*network_id);
         }
     }
 
@@ -320,6 +372,19 @@ impl ClientWorld {
                     && entry.entity_type == 0
                 {
                     entry.entity_type = 5;
+                }
+            }
+            aetheris_protocol::types::SHIELD_POOL_KIND => self.handle_shield_pool_update(update),
+            aetheris_protocol::types::HULL_POOL_KIND => self.handle_hull_pool_update(update),
+            aetheris_protocol::types::CARGO_DROP_KIND => {
+                if let Some(entry) = self.entities.get_mut(&update.network_id) {
+                    entry.entity_type = 6;
+                }
+            }
+            PROJECTILE_MARKER_KIND => {
+                // ProjectileMarker: set entity_type to 20 if not already set
+                if let Some(entry) = self.entities.get_mut(&update.network_id) {
+                    entry.entity_type = 20;
                 }
             }
             aetheris_protocol::types::ROOM_BOUNDS_KIND => self.handle_room_bounds_update(update),
@@ -503,6 +568,34 @@ impl ClientWorld {
             let mut sw = unsafe { crate::shared_world::SharedWorld::from_ptr(ptr_val as *mut u8) };
             sw.set_room_bounds(bounds.min_x, bounds.min_y, bounds.max_x, bounds.max_y);
             self.room_bounds = Some(bounds);
+        }
+    }
+
+    fn handle_shield_pool_update(&mut self, update: &ComponentUpdate) {
+        use aetheris_protocol::types::ShieldPool;
+        match rmp_serde::from_slice::<ShieldPool>(&update.payload) {
+            Ok(pool) => {
+                if let Some(entry) = self.entities.get_mut(&update.network_id) {
+                    entry.shield = pool.current;
+                }
+            }
+            Err(e) => {
+                tracing::warn!(network_id = update.network_id.0, error = ?e, "Failed to decode ShieldPool");
+            }
+        }
+    }
+
+    fn handle_hull_pool_update(&mut self, update: &ComponentUpdate) {
+        use aetheris_protocol::types::HullPool;
+        match rmp_serde::from_slice::<HullPool>(&update.payload) {
+            Ok(pool) => {
+                if let Some(entry) = self.entities.get_mut(&update.network_id) {
+                    entry.hp = pool.current;
+                }
+            }
+            Err(e) => {
+                tracing::warn!(network_id = update.network_id.0, error = ?e, "Failed to decode HullPool");
+            }
         }
     }
 }

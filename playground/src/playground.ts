@@ -97,9 +97,16 @@ class AetherisPlayground {
 
         // Populate themes
         const themes = this.world.availableThemes;
-        selector.innerHTML = themes.map(t =>
-            `<option value="${t.slug}" ${t.slug === this.world.activeTheme ? 'selected' : ''}>${t.displayName}</option>`
-        ).join('');
+        selector.innerHTML = '';
+        themes.forEach(t => {
+            const option = document.createElement('option');
+            option.value = t.slug;
+            option.textContent = t.displayName;
+            if (t.slug === this.world.activeTheme) {
+                option.selected = true;
+            }
+            selector.appendChild(option);
+        });
 
         // Handle manual change
         selector.addEventListener('change', () => {
@@ -333,6 +340,16 @@ class AetherisPlayground {
             handler: () => {
                 const current = this.world.activeTheme;
                 this.world.switchTheme(current === 'blueprint-lite' ? 'blueprint' : 'blueprint-lite');
+            }
+        });
+
+        shortcuts.register({
+            key: 'G',
+            namespace: 'game',
+            label: 'Spawn Training Dummy',
+            category: 'Game',
+            handler: () => {
+                this.spawnDummy();
             }
         });
 
@@ -579,6 +596,9 @@ class AetherisPlayground {
 
                 case 'wasm_metrics':
                     this.updateWasmMetrics(payload);
+                    if (e.data.entities) {
+                        this.updateEntityStatuses(e.data.entities);
+                    }
                     if (e.data.manifest) {
                         const manifestObj = (e.data.manifest instanceof Map)
                             ? Object.fromEntries(e.data.manifest)
@@ -654,8 +674,19 @@ class AetherisPlayground {
         this.updateEntityCount();
     }
 
+    /** Spawns a training dummy in front of the player. */
+    spawnDummy() {
+        if (!this.isSessionActive) {
+            console.warn('[Playground] Cannot spawn dummy: session not active');
+            return;
+        }
+        console.log('[Playground] Spawning training dummy...');
+        this.gameWorker.postMessage({ type: 'p_spawn_dummy' });
+    }
+
     private updateSessionUI() {
         const btn = document.getElementById('btn-start');
+        const spawnBtn = document.getElementById('btn-spawn-dummy');
         if (!btn) return;
 
         if (this.isSessionActive) {
@@ -663,11 +694,13 @@ class AetherisPlayground {
             btn.classList.add('danger');
             btn.classList.remove('primary');
             btn.style.display = 'block';
+            if (spawnBtn) spawnBtn.style.display = 'block';
         } else {
             btn.innerText = 'Start Session (Spawn Ship)';
             btn.classList.add('primary');
             btn.classList.remove('danger');
             btn.style.display = 'block';
+            if (spawnBtn) spawnBtn.style.display = 'none';
         }
     }
 
@@ -825,6 +858,132 @@ class AetherisPlayground {
         const sabStat = document.getElementById('stat-sab');
         if (sabStat) {
             sabStat.innerText = `ACTIVE (${metrics.snapshot_count} Snaps)`;
+        }
+    }
+
+    private updateEntityStatuses(entities: any[]) {
+        const container = document.getElementById('entity-list');
+        if (!container) return;
+
+        if (entities.length === 0) {
+            container.innerHTML = '';
+            const empty = document.createElement('div');
+            empty.style.fontSize = '0.625rem';
+            empty.style.color = 'var(--text-muted)';
+            empty.style.textAlign = 'center';
+            empty.style.padding = '12px';
+            empty.textContent = 'No active entities detected';
+            container.appendChild(empty);
+            return;
+        }
+
+        // Sort: Player first, then by Network ID
+        entities.sort((a, b) => {
+            if (a.is_player && !b.is_player) return -1;
+            if (!a.is_player && b.is_player) return 1;
+            return parseInt(a.network_id) - parseInt(b.network_id);
+        });
+
+        // Limit to top 20 entities to avoid UI lag
+        const displayEntities = entities.slice(0, 20);
+
+        // Map entity types to labels
+        const getEntityLabel = (type: number) => {
+            switch (type) {
+                case 1:
+                case 2: return 'Interceptor';
+                case 3: return 'Dreadnought';
+                case 4: return 'Hauler';
+                case 5: return 'Asteroid';
+                case 6: return 'Cargo Drop';
+                case 10: return 'Training Dummy';
+                case 20: return 'Projectile';
+                default: return `Type ${type}`;
+            }
+        };
+
+        // Build list via DOM API to avoid XSS vulnerabilities (mirroring updateSystemManifest)
+        container.innerHTML = '';
+        for (const entity of displayEntities) {
+            const label = getEntityLabel(entity.entity_type);
+            const hpPercent = Math.min(100, Math.max(0, (entity.hp / 100) * 100));
+            const shieldPercent = Math.min(100, Math.max(0, (entity.shield / 100) * 100));
+
+            const item = document.createElement('div');
+            item.className = `entity-item ${entity.is_player ? 'is-player' : ''}`;
+
+            const header = document.createElement('div');
+            header.className = 'entity-item-header';
+
+            const typeEl = document.createElement('span');
+            typeEl.className = 'entity-type';
+            typeEl.textContent = `${label} ${entity.is_player ? '(YOU)' : ''}`;
+
+            const idElement = document.createElement('span');
+            idElement.className = 'entity-id';
+            idElement.textContent = `#${entity.network_id}`;
+
+            header.appendChild(typeEl);
+            header.appendChild(idElement);
+            item.appendChild(header);
+
+            const vitals = document.createElement('div');
+            vitals.className = 'vitals-container';
+
+            // HP Row
+            const hpRow = document.createElement('div');
+            hpRow.className = 'vital-row';
+            const hpLabel = document.createElement('span');
+            hpLabel.className = 'vital-label';
+            hpLabel.textContent = 'Hull';
+            const hpProgressBg = document.createElement('div');
+            hpProgressBg.className = 'progress-bg';
+            const hpProgressFill = document.createElement('div');
+            hpProgressFill.className = 'progress-fill hp-fill';
+            hpProgressFill.style.width = `${hpPercent}%`;
+            const hpVal = document.createElement('span');
+            hpVal.className = 'vital-value';
+            hpVal.textContent = String(entity.hp);
+
+            hpProgressBg.appendChild(hpProgressFill);
+            hpRow.appendChild(hpLabel);
+            hpRow.appendChild(hpProgressBg);
+            hpRow.appendChild(hpVal);
+            vitals.appendChild(hpRow);
+
+            // Shield Row
+            const shieldRow = document.createElement('div');
+            shieldRow.className = 'vital-row';
+            const shieldLabel = document.createElement('span');
+            shieldLabel.className = 'vital-label';
+            shieldLabel.textContent = 'Shield';
+            const shieldProgressBg = document.createElement('div');
+            shieldProgressBg.className = 'progress-bg';
+            const shieldProgressFill = document.createElement('div');
+            shieldProgressFill.className = 'progress-fill shield-fill';
+            shieldProgressFill.style.width = `${shieldPercent}%`;
+            const shieldVal = document.createElement('span');
+            shieldVal.className = 'vital-value';
+            shieldVal.textContent = String(entity.shield);
+
+            shieldProgressBg.appendChild(shieldProgressFill);
+            shieldRow.appendChild(shieldLabel);
+            shieldRow.appendChild(shieldProgressBg);
+            shieldRow.appendChild(shieldVal);
+            vitals.appendChild(shieldRow);
+
+            item.appendChild(vitals);
+            container.appendChild(item);
+        }
+
+        if (entities.length > 20) {
+            const more = document.createElement('div');
+            more.style.fontSize = '0.5rem';
+            more.style.color = 'var(--text-muted)';
+            more.style.textAlign = 'center';
+            more.style.padding = '4px';
+            more.textContent = `+ ${entities.length - 20} more entities hidden`;
+            container.appendChild(more);
         }
     }
 

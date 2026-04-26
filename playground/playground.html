@@ -733,6 +733,109 @@
         }
 
         /* ════════════════════════════════════════
+         * ENTITY LIST
+         * ════════════════════════════════════════ */
+        #entity-list {
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+            max-height: 250px;
+            overflow-y: auto;
+            padding-right: 4px;
+            scrollbar-width: thin;
+        }
+
+        .entity-item {
+            background: rgba(0, 0, 0, 0.22);
+            border: 1px solid var(--border-subtle);
+            border-radius: var(--world-radius-sm);
+            padding: 8px;
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+            transition: border-color 0.2s ease;
+        }
+
+        .entity-item:hover {
+            border-color: var(--border-normal);
+        }
+
+        .entity-item.is-player {
+            border-color: var(--accent-primary);
+            background: rgba(56, 189, 248, 0.05);
+        }
+
+        .entity-item-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            font-size: 0.625rem;
+            font-family: var(--world-font-mono);
+            font-weight: 600;
+        }
+
+        .entity-type {
+            color: var(--text-muted);
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }
+
+        .entity-id {
+            color: var(--accent-primary);
+        }
+
+        .vitals-container {
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+        }
+
+        .vital-row {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .vital-label {
+            font-size: 0.5625rem;
+            color: var(--text-muted);
+            min-width: 32px;
+            text-transform: uppercase;
+        }
+
+        .progress-bg {
+            flex: 1;
+            height: 4px;
+            background: rgba(0, 0, 0, 0.3);
+            border-radius: 2px;
+            overflow: hidden;
+            position: relative;
+        }
+
+        .progress-fill {
+            height: 100%;
+            transition: width 0.3s ease-out;
+        }
+
+        .hp-fill {
+            background: linear-gradient(90deg, #ef4444, #f87171);
+            box-shadow: 0 0 8px rgba(239, 68, 68, 0.3);
+        }
+
+        .shield-fill {
+            background: linear-gradient(90deg, #3b82f6, #60a5fa);
+            box-shadow: 0 0 8px rgba(59, 130, 246, 0.3);
+        }
+
+        .vital-value {
+            font-size: 0.625rem;
+            font-family: var(--world-font-mono);
+            color: var(--text-secondary);
+            min-width: 24px;
+            text-align: right;
+        }
+
+        /* ════════════════════════════════════════
          * SHORTCUT HELP OVERLAY
          * ════════════════════════════════════════ */
         #shortcut-overlay {
@@ -1009,7 +1112,19 @@
                 </div>
             </div>
 
-            <!-- 3. Keyboard Input (Closed) -->
+            <!-- 3. Entity Status -->
+            <div id="section-entities" class="section">
+                <span class="section-title">ENTITY STATUS <span class="chevron">▼</span></span>
+                <div class="section-body">
+                    <div id="entity-list" role="region" aria-label="Entity vitals list">
+                        <div style="font-size: 0.625rem; color: var(--text-muted); text-align: center; padding: 12px;">
+                            No active entities detected
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 4. Keyboard Input (Closed) -->
             <div id="section-input" class="section collapsed">
                 <span class="section-title">KEYBOARD INPUT <span class="chevron">▼</span></span>
                 <div class="section-body" style="padding: 4px 0;">
@@ -1031,6 +1146,7 @@
                 <span class="section-title">SESSION CONTROL <span class="chevron">▼</span></span>
                 <div class="section-body">
                     <button class="primary" id="btn-start" onclick="toggleSession()" style="display: none;">START SESSION (SPAWN SHIP)</button>
+                    <button class="secondary" id="btn-spawn-dummy" onclick="window.playground?.spawnDummy()" style="display: none; margin-top: 4px;">SPAWN TRAINING DUMMY</button>
                 </div>
             </div>
 
