@@ -656,6 +656,8 @@ mod wasm_impl {
             }
 
             // 1. Poll Network
+            let mut collected_game_events = Vec::new();
+
             if let Some(transport) = &mut self.transport {
                 let events = match transport.poll_events().await {
                     Ok(e) => e,
@@ -696,42 +698,9 @@ mod wasm_impl {
                                             aetheris_protocol::events::NetworkEvent::GameEvent {
                                                 event: game_event,
                                                 ..
-                                            } => match &game_event {
-                                                aetheris_protocol::events::GameEvent::AsteroidDepleted {
-                                                    network_id,
-                                                } => {
-                                                    tracing::info!(?network_id, "Asteroid depleted");
-                                                    self.world_state.entities.remove(&network_id);
-
-                                                    for slot in self.world_state.entities.values_mut() {
-                                                        if (slot.flags & 0x04) != 0
-                                                            && slot.mining_target_id == (network_id.0 as u16)
-                                                        {
-                                                            slot.mining_active = 0;
-                                                            slot.mining_target_id = 0;
-                                                            tracing::info!("Cleared local mining target due to depletion");
-                                                        }
-                                                    }
-                                                }
-                                                aetheris_protocol::events::GameEvent::Possession {
-                                                    network_id: _,
-                                                }
-                                                | aetheris_protocol::events::GameEvent::DamageEvent { .. }
-                                                | aetheris_protocol::events::GameEvent::DeathEvent { .. }
-                                                | aetheris_protocol::events::GameEvent::RespawnEvent { .. }
-                                                | aetheris_protocol::events::GameEvent::CargoCollected { .. } => {
-                                                    self.world_state.handle_game_event(&game_event);
-                                                }
-                                                aetheris_protocol::events::GameEvent::SystemManifest {
-                                                    manifest,
-                                                } => {
-                                                    tracing::debug!(
-                                                        count = manifest.len(),
-                                                        "Received SystemManifest from server"
-                                                    );
-                                                    self.world_state.system_manifest = manifest.clone();
-                                                }
-                                            },
+                                            } => {
+                                                collected_game_events.push(game_event);
+                                            }
                                             aetheris_protocol::events::NetworkEvent::ClearWorld {
                                                 ..
                                             } => {
@@ -839,52 +808,7 @@ mod wasm_impl {
                         NetworkEvent::GameEvent {
                             event: game_event, ..
                         } => {
-                            // Forward to inner GameEvent logic if needed,
-                            // or just handle the depletion here if it's the only one.
-                            match &game_event {
-                                aetheris_protocol::events::GameEvent::AsteroidDepleted {
-                                    network_id,
-                                } => {
-                                    tracing::info!(
-                                        ?network_id,
-                                        "Asteroid depleted (via GameEvent)"
-                                    );
-                                    // Instant local despawn to hide latency
-                                    self.world_state.entities.remove(&network_id);
-
-                                    // Clear local mining target if it matches the depleted asteroid
-                                    for slot in self.world_state.entities.values_mut() {
-                                        // flags & 0x04 is local player
-                                        if (slot.flags & 0x04) != 0
-                                            && slot.mining_target_id == (network_id.0 as u16)
-                                        {
-                                            slot.mining_active = 0;
-                                            slot.mining_target_id = 0;
-                                            tracing::info!(
-                                                "Cleared local mining target due to depletion"
-                                            );
-                                        }
-                                    }
-                                }
-                                aetheris_protocol::events::GameEvent::SystemManifest {
-                                    manifest,
-                                } => {
-                                    tracing::info!(
-                                        count = manifest.len(),
-                                        "Received SystemManifest from server (via GameEvent)"
-                                    );
-                                    self.world_state.system_manifest = manifest.clone();
-                                }
-                                aetheris_protocol::events::GameEvent::Possession {
-                                    network_id: _,
-                                }
-                                | aetheris_protocol::events::GameEvent::DamageEvent { .. }
-                                | aetheris_protocol::events::GameEvent::DeathEvent { .. }
-                                | aetheris_protocol::events::GameEvent::RespawnEvent { .. }
-                                | aetheris_protocol::events::GameEvent::CargoCollected { .. } => {
-                                    self.world_state.handle_game_event(&game_event);
-                                }
-                            }
+                            collected_game_events.push(game_event);
                         }
                         #[allow(unreachable_patterns)]
                         _ => {
@@ -927,6 +851,12 @@ mod wasm_impl {
                         self.world_state.apply_updates(&updates);
                     }
                 }
+            }
+
+            // 1.5 Dispatch Collected Game Events
+            // This is done after the transport borrow scope ends to satisfy the borrow checker.
+            for game_event in collected_game_events {
+                self.dispatch_game_event(&game_event);
             }
 
             // 2.5. Fixed-Timestep Simulation Loop (M1020)
@@ -1044,13 +974,48 @@ mod wasm_impl {
                 .map_err(|e| JsValue::from_str(&e.to_string()))
         }
 
+        fn dispatch_game_event(&mut self, game_event: &aetheris_protocol::events::GameEvent) {
+            match game_event {
+                aetheris_protocol::events::GameEvent::AsteroidDepleted { network_id } => {
+                    tracing::info!(?network_id, "Asteroid depleted (via GameEvent)");
+                    self.world_state.entities.remove(network_id);
+
+                    for slot in self.world_state.entities.values_mut() {
+                        if (slot.flags & 0x04) != 0
+                            && slot.mining_target_id == (network_id.0 as u16)
+                        {
+                            slot.mining_active = 0;
+                            slot.mining_target_id = 0;
+                            tracing::info!("Cleared local mining target due to depletion");
+                        }
+                    }
+                }
+                aetheris_protocol::events::GameEvent::SystemManifest { manifest } => {
+                    tracing::info!(
+                        count = manifest.len(),
+                        "Received SystemManifest from server (via GameEvent)"
+                    );
+                    self.world_state.system_manifest = manifest.clone();
+                }
+                aetheris_protocol::events::GameEvent::Possession { .. }
+                | aetheris_protocol::events::GameEvent::DamageEvent { .. }
+                | aetheris_protocol::events::GameEvent::DeathEvent { .. }
+                | aetheris_protocol::events::GameEvent::RespawnEvent { .. }
+                | aetheris_protocol::events::GameEvent::CargoCollected { .. } => {
+                    self.world_state.handle_game_event(game_event);
+                }
+            }
+        }
+
         #[wasm_bindgen]
         pub fn wasm_get_entity_statuses(&self) -> JsValue {
             #[derive(serde::Serialize)]
             struct EntityStatus {
                 network_id: String,
                 hp: u16,
+                max_hp: u16,
                 shield: u16,
+                max_shield: u16,
                 entity_type: u16,
                 is_player: bool,
             }
@@ -1060,12 +1025,20 @@ mod wasm_impl {
 
             let statuses: Vec<EntityStatus> = entities
                 .into_iter()
-                .map(|slot| EntityStatus {
-                    network_id: slot.network_id.to_string(),
-                    hp: slot.hp,
-                    shield: slot.shield,
-                    entity_type: slot.entity_type,
-                    is_player: (slot.flags & 0x04) != 0,
+                .map(|slot| {
+                    // M1020 §3.3: Max vitals are derived from authoritative protocol definitions.
+                    let (max_hp, max_shield) =
+                        aetheris_protocol::types::get_default_stats(slot.entity_type);
+
+                    EntityStatus {
+                        network_id: slot.network_id.to_string(),
+                        hp: slot.hp,
+                        max_hp,
+                        shield: slot.shield,
+                        max_shield,
+                        entity_type: slot.entity_type,
+                        is_player: (slot.flags & 0x04) != 0,
+                    }
                 })
                 .collect();
 
@@ -1102,6 +1075,7 @@ mod wasm_impl {
 
             let id = aetheris_protocol::types::NetworkId(self.playground_next_network_id);
             self.playground_next_network_id += 1;
+            let (hp, shield) = aetheris_protocol::types::get_default_stats(entity_type);
             let slot = SabSlot {
                 network_id: id.0,
                 x,
@@ -1111,8 +1085,8 @@ mod wasm_impl {
                 dx: 0.0,
                 dy: 0.0,
                 dz: 0.0,
-                hp: 100,
-                shield: 100,
+                hp,
+                shield,
                 entity_type,
                 flags: 0x01, // ALIVE
                 mining_active: 0,

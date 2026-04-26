@@ -48,8 +48,9 @@ dependencies = [
 
 [[package]]
 name = "aetheris-encoder-serde"
-version = "0.2.21"
-source = "git+https://github.com/garnizeh-labs/aetheris-protocol?rev=546b50f6738af09936196338a908c499506bf64e#546b50f6738af09936196338a908c499506bf64e"
+version = "0.2.22"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e0cb690d1f56a35887264bb732b1a07e8a067ab07a8a6115112abf63d1fad163"
 dependencies = [
  "aetheris-protocol",
  "metrics",
@@ -60,8 +61,9 @@ dependencies = [
 
 [[package]]
 name = "aetheris-protocol"
-version = "0.2.21"
-source = "git+https://github.com/garnizeh-labs/aetheris-protocol?rev=546b50f6738af09936196338a908c499506bf64e#546b50f6738af09936196338a908c499506bf64e"
+version = "0.2.22"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "0e0b6ee7884d74691ba396b3d6494f154425d01f387b377878b1647fd7144b1c"
 dependencies = [
  "async-trait",
  "serde",
@@ -230,9 +232,9 @@ checksum = "37b2a672a2cb129a2e41c10b1224bb368f9f37a2b16b612598138befd7b37eb5"
 
 [[package]]
 name = "cc"
-version = "1.2.60"
+version = "1.2.61"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "43c5703da9466b66a946814e1adf53ea2c90f10063b86290cc9eb67ce3478a20"
+checksum = "d16d90359e986641506914ba71350897565610e87ce0ad9e6f28569db3dd5c6d"
 dependencies = [
  "find-msvc-tools",
  "shlex",
@@ -771,9 +773,9 @@ checksum = "09edd9e8b54e49e587e4f6295a7d29c3ea94d469cb40ab8ca70b288248a81db2"
 
 [[package]]
 name = "libc"
-version = "0.2.185"
+version = "0.2.186"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "52ff2c0fe9bc6cb6b14a0592c2ff4fa9ceb83eea9db979b0487cd054946a2b8f"
+checksum = "68ab91017fe16c622486840e4c83c9a37afeff978bd239b5293d61ece587de66"
 
 [[package]]
 name = "libloading"
@@ -2424,8 +2426,3 @@ name = "zmij"
 version = "1.0.21"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b8848ee67ecc8aedbaf3e4122217aff892639231befc6a1b58d29fff4c2cabaa"
-
-[[patch.unused]]
-name = "aetheris-encoder-bitpack"
-version = "0.2.21"
-source = "git+https://github.com/garnizeh-labs/aetheris-protocol?rev=546b50f6738af09936196338a908c499506bf64e#546b50f6738af09936196338a908c499506bf64e"
