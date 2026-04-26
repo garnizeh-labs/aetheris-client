@@ -8,7 +8,8 @@ use aetheris_protocol::error::WorldError;
 use aetheris_protocol::events::{ComponentUpdate, ReplicationEvent};
 use aetheris_protocol::traits::WorldState;
 use aetheris_protocol::types::{
-    ClientId, ComponentKind, LocalId, NetworkId, ShipClass, ShipStats, Transform,
+    ClientId, ComponentKind, LocalId, NetworkId, PROJECTILE_MARKER_KIND, ShipClass, ShipStats,
+    Transform,
 };
 use std::collections::{BTreeMap, VecDeque};
 
@@ -183,10 +184,13 @@ impl WorldState for ClientWorld {
     fn simulate(&mut self) {
         const DRAG: f32 = 1.0;
         const DT: f32 = 1.0 / 60.0;
-        let drag_factor = 1.0 / (1.0 + DRAG * DT);
 
         for slot in self.entities.values_mut() {
             // Semi-implicit Euler integration
+            // VS-03: Projectiles (Kind 20) have zero drag to avoid "stopping" visually
+            let current_drag = if slot.entity_type == 20 { 0.0 } else { DRAG };
+            let drag_factor = 1.0 / (1.0 + current_drag * DT);
+
             slot.dx *= drag_factor;
             slot.dy *= drag_factor;
             slot.x += slot.dx * DT;
@@ -326,17 +330,32 @@ impl ClientWorld {
                 "[handle_game_event] DamageEvent received"
             );
 
-            // Set visual flash on the source entity
+            // Set visual flash on the source entity (firing effect)
             if let Some(slot) = self.entities.get_mut(source) {
                 slot.combat_target_id = (target.0 & 0xFFFF) as u16;
-                slot.combat_flash_ticks = 10; // Show for 10 ticks (approx 160ms)
+                slot.combat_flash_ticks = 10;
+            }
+
+            // Set visual flash on the target entity (hit effect)
+            if let Some(slot) = self.entities.get_mut(target) {
+                slot.combat_flash_ticks = 10;
             }
         } else if let aetheris_protocol::events::GameEvent::DeathEvent { target } = event {
             tracing::info!(?target, "[handle_game_event] DeathEvent received");
             // Despawn will happen when the server stops replicating the entity,
             // but we can mark it as dead or play an explosion VFX here.
+            let _ = self.despawn_networked(*target);
         } else if let aetheris_protocol::events::GameEvent::RespawnEvent { target, x, y } = event {
             tracing::info!(?target, x, y, "[handle_game_event] RespawnEvent received");
+        } else if let aetheris_protocol::events::GameEvent::CargoCollected { network_id, amount } =
+            event
+        {
+            tracing::info!(
+                ?network_id,
+                amount,
+                "[handle_game_event] CargoCollected received"
+            );
+            let _ = self.despawn_networked(*network_id);
         }
     }
 
@@ -360,6 +379,12 @@ impl ClientWorld {
             aetheris_protocol::types::CARGO_DROP_KIND => {
                 if let Some(entry) = self.entities.get_mut(&update.network_id) {
                     entry.entity_type = 6;
+                }
+            }
+            PROJECTILE_MARKER_KIND => {
+                // ProjectileMarker: set entity_type to 20 if not already set
+                if let Some(entry) = self.entities.get_mut(&update.network_id) {
+                    entry.entity_type = 20;
                 }
             }
             aetheris_protocol::types::ROOM_BOUNDS_KIND => self.handle_room_bounds_update(update),

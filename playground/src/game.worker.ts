@@ -134,6 +134,9 @@ async function pollMetricsOnce(forceManifest: boolean = false) {
                 // regardless of the outgoing request throttle.
                 const manifest = (c as any).get_system_info();
 
+                // 3. Entity statuses (real-time vitals for UI panel)
+                const entities = (c as any).wasm_get_entity_statuses();
+
                 if (manifest && ((manifest instanceof Map && manifest.size > 0) || (Object.keys(manifest).length > 0))) {
                     const manifestObj = (manifest instanceof Map) ? Object.fromEntries(manifest) : (manifest as any);
 
@@ -145,12 +148,12 @@ async function pollMetricsOnce(forceManifest: boolean = false) {
                         lastLoggedManifestWorker = manifestStr;
                         // We don't log in the worker anymore to avoid redundancy with the main thread,
                         // but we still de-duplicate here to save IPC bandwidth.
-                        self.postMessage({ type: 'wasm_metrics', payload: metrics, manifest });
+                        self.postMessage({ type: 'wasm_metrics', payload: metrics, manifest, entities });
                     } else {
-                        self.postMessage({ type: 'wasm_metrics', payload: metrics });
+                        self.postMessage({ type: 'wasm_metrics', payload: metrics, entities });
                     }
                 } else {
-                    self.postMessage({ type: 'wasm_metrics', payload: metrics });
+                    self.postMessage({ type: 'wasm_metrics', payload: metrics, entities });
                 }
             });
         } else if (metrics) {

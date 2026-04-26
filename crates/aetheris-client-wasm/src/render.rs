@@ -482,18 +482,18 @@ impl RenderState {
         );
         add_primitive(
             6_u16,
-            crate::render_primitives::create_projectile_mesh(),
-            [1.0, 1.0, 0.5, 1.0], // Projectile Yellow
-        );
-        add_primitive(
-            7_u16,
             crate::render_primitives::create_cube_mesh(0.4, 0.4, 0.4),
             [0.8, 0.8, 0.2, 1.0], // Cargo Yellow
         );
         add_primitive(
+            20_u16,
+            crate::render_primitives::create_projectile_mesh(),
+            [1.0, 1.0, 0.0, 1.0], // Projectile Vibrant Neon Yellow
+        );
+        add_primitive(
             10_u16,
             crate::render_primitives::create_cube_mesh(0.8, 0.8, 0.8),
-            [1.0, 0.5, 0.0, 1.0], // Orange
+            [1.0, 0.5, 0.0, 1.0], // Training Dummy Orange
         );
 
         // 4. Pipeline
@@ -1129,15 +1129,31 @@ impl RenderState {
                         }
 
                         // Normal drawing
+                        let scale = if ent.entity_type == 20 { 1.5 } else { 1.0 };
                         let model_matrix = Mat4::from_translation(Vec3::new(ent.x, ent.y, 0.0))
-                            * Mat4::from_rotation_z(ent.rotation);
+                            * Mat4::from_rotation_z(ent.rotation)
+                            * Mat4::from_scale(Vec3::splat(scale));
+
+                        if ent.entity_type == 20 {
+                            tracing::info!(
+                                network_id = ent.network_id,
+                                x = ent.x,
+                                y = ent.y,
+                                "RENDERING PROJECTILE"
+                            );
+                        }
+
+                        let mut color = primitive.color;
+                        if ent.combat_flash_ticks > 0 {
+                            color = [1.0, 1.0, 1.0, 1.0]; // Flash white
+                        }
 
                         type_batches
                             .entry(ent.entity_type)
                             .or_default()
                             .push(ObjectInstance {
                                 model_matrix: model_matrix.to_cols_array(),
-                                color: primitive.color,
+                                color,
                             });
                     }
                 }

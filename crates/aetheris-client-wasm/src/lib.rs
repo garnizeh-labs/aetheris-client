@@ -179,6 +179,7 @@ mod wasm_impl {
         playground_move_y: f32,
         playground_actions: u32,
         last_fraction: f32,
+        last_actions_mask: u32,
     }
 
     #[wasm_bindgen]
@@ -284,6 +285,7 @@ mod wasm_impl {
                 playground_move_y: 0.0,
                 playground_actions: 0,
                 last_fraction: 0.0,
+                last_actions_mask: 0,
             })
         }
 
@@ -716,7 +718,8 @@ mod wasm_impl {
                                                 }
                                                 | aetheris_protocol::events::GameEvent::DamageEvent { .. }
                                                 | aetheris_protocol::events::GameEvent::DeathEvent { .. }
-                                                | aetheris_protocol::events::GameEvent::RespawnEvent { .. } => {
+                                                | aetheris_protocol::events::GameEvent::RespawnEvent { .. }
+                                                | aetheris_protocol::events::GameEvent::CargoCollected { .. } => {
                                                     self.world_state.handle_game_event(&game_event);
                                                 }
                                                 aetheris_protocol::events::GameEvent::SystemManifest {
@@ -877,7 +880,8 @@ mod wasm_impl {
                                 }
                                 | aetheris_protocol::events::GameEvent::DamageEvent { .. }
                                 | aetheris_protocol::events::GameEvent::DeathEvent { .. }
-                                | aetheris_protocol::events::GameEvent::RespawnEvent { .. } => {
+                                | aetheris_protocol::events::GameEvent::RespawnEvent { .. }
+                                | aetheris_protocol::events::GameEvent::CargoCollected { .. } => {
                                     self.world_state.handle_game_event(&game_event);
                                 }
                             }
@@ -1038,6 +1042,33 @@ mod wasm_impl {
         pub fn get_system_info(&self) -> Result<JsValue, JsValue> {
             serde_wasm_bindgen::to_value(&self.world_state.system_manifest)
                 .map_err(|e| JsValue::from_str(&e.to_string()))
+        }
+
+        #[wasm_bindgen]
+        pub fn wasm_get_entity_statuses(&self) -> JsValue {
+            #[derive(serde::Serialize)]
+            struct EntityStatus {
+                network_id: String,
+                hp: u16,
+                shield: u16,
+                entity_type: u16,
+                is_player: bool,
+            }
+
+            let statuses: Vec<EntityStatus> = self
+                .world_state
+                .entities
+                .values()
+                .map(|slot| EntityStatus {
+                    network_id: slot.network_id.to_string(),
+                    hp: slot.hp,
+                    shield: slot.shield,
+                    entity_type: slot.entity_type,
+                    is_player: (slot.flags & 0x04) != 0,
+                })
+                .collect();
+
+            serde_wasm_bindgen::to_value(&statuses).unwrap_or(JsValue::NULL)
         }
 
         #[wasm_bindgen]
@@ -1215,8 +1246,8 @@ mod wasm_impl {
             if (actions_mask & 0x04) != 0 {
                 actions.push(PlayerInputKind::FirePrimary);
             }
-            // Bit 1: ToggleMining
-            if (actions_mask & 0x02) != 0 {
+            // Bit 1: ToggleMining (Edge-triggered)
+            if (actions_mask & 0x02) != 0 && (self.last_actions_mask & 0x02) == 0 {
                 let target = if let Some(id) = target_id_arg {
                     Some(NetworkId(id))
                 } else {
@@ -1249,6 +1280,8 @@ mod wasm_impl {
                     );
                 }
             }
+
+            self.last_actions_mask = actions_mask;
 
             // 3. Noise reduction check
             let is_repeated = self.last_input_actions.len() == actions.len()
@@ -1626,6 +1659,15 @@ mod wasm_impl {
                     }
                     ent.z = lerp(prev.z, ent.z, alpha);
                     ent.rotation = lerp_rotation(prev.rotation, ent.rotation, alpha);
+                } else {
+                    // M1013/M1020 — Extrapolate backwards for newly spawned entities.
+                    // This prevents the "blink" where an entity appears to stand still for
+                    // one tick before starting to move.
+                    let dt = 1.0 / 60.0;
+                    let remaining = 1.0 - alpha;
+                    ent.x -= ent.dx * dt * remaining;
+                    ent.y -= ent.dy * dt * remaining;
+                    ent.z -= ent.dz * dt * remaining;
                 }
             }
 

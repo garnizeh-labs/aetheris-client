@@ -590,6 +590,9 @@ class AetherisPlayground {
 
                 case 'wasm_metrics':
                     this.updateWasmMetrics(payload);
+                    if (e.data.entities) {
+                        this.updateEntityStatuses(e.data.entities);
+                    }
                     if (e.data.manifest) {
                         const manifestObj = (e.data.manifest instanceof Map)
                             ? Object.fromEntries(e.data.manifest)
@@ -846,6 +849,81 @@ class AetherisPlayground {
         if (sabStat) {
             sabStat.innerText = `ACTIVE (${metrics.snapshot_count} Snaps)`;
         }
+    }
+
+    private updateEntityStatuses(entities: any[]) {
+        const container = document.getElementById('entity-list');
+        if (!container) return;
+
+        if (entities.length === 0) {
+            container.innerHTML = `<div style="font-size: 0.625rem; color: var(--text-muted); text-align: center; padding: 12px;">No active entities detected</div>`;
+            return;
+        }
+
+        // Sort: Player first, then by Network ID
+        entities.sort((a, b) => {
+            if (a.is_player && !b.is_player) return -1;
+            if (!a.is_player && b.is_player) return 1;
+            return parseInt(a.network_id) - parseInt(b.network_id);
+        });
+
+        // Limit to top 20 entities to avoid UI lag
+        const displayEntities = entities.slice(0, 20);
+
+        // Map entity types to labels
+        const getEntityLabel = (type: number) => {
+            switch (type) {
+                case 1:
+                case 2: return 'Interceptor';
+                case 3: return 'Dreadnought';
+                case 4: return 'Hauler';
+                case 5: return 'Asteroid';
+                case 6: return 'Cargo Drop';
+                case 10: return 'Training Dummy';
+                case 20: return 'Projectile';
+                default: return `Type ${type}`;
+            }
+        };
+
+        // Efficient DOM update: instead of re-creating everything, we can use a fragment or 
+        // simple innerHTML if it's not too frequent. Since it's every 1s, innerHTML is fine.
+        let html = '';
+        for (const entity of displayEntities) {
+            const label = getEntityLabel(entity.entity_type);
+            const hpPercent = Math.min(100, Math.max(0, (entity.hp / 100) * 100));
+            const shieldPercent = Math.min(100, Math.max(0, (entity.shield / 100) * 100));
+            
+            html += `
+                <div class="entity-item ${entity.is_player ? 'is-player' : ''}">
+                    <div class="entity-item-header">
+                        <span class="entity-type">${label} ${entity.is_player ? '(YOU)' : ''}</span>
+                        <span class="entity-id">#${entity.network_id}</span>
+                    </div>
+                    <div class="vitals-container">
+                        <div class="vital-row">
+                            <span class="vital-label">Hull</span>
+                            <div class="progress-bg">
+                                <div class="progress-fill hp-fill" style="width: ${hpPercent}%"></div>
+                            </div>
+                            <span class="vital-value">${entity.hp}</span>
+                        </div>
+                        <div class="vital-row">
+                            <span class="vital-label">Shield</span>
+                            <div class="progress-bg">
+                                <div class="progress-fill shield-fill" style="width: ${shieldPercent}%"></div>
+                            </div>
+                            <span class="vital-value">${entity.shield}</span>
+                        </div>
+                    </div>
+                </div>
+            `;
+        }
+        
+        if (entities.length > 20) {
+            html += `<div style="font-size: 0.5rem; color: var(--text-muted); text-align: center; padding: 4px;">+ ${entities.length - 20} more entities hidden</div>`;
+        }
+
+        container.innerHTML = html;
     }
 
     requestOtp(email: string) {
