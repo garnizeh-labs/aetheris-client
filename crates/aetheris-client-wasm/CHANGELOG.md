@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- *(client)* Resolved multiple mutable borrow error in `tick` by implementing a deferred `collected_game_events` queue.
+
+### Changed
+
+- *(client)* Updated `wasm_get_entity_statuses` to use centralized `get_default_stats` from `aetheris-protocol`.
+
 ## [0.3.24](https://github.com/garnizeh-labs/aetheris-client/compare/aetheris-client-wasm-v0.3.22...aetheris-client-wasm-v0.3.24) - 2026-04-26
 
 ### Added

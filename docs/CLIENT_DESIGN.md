@@ -176,6 +176,10 @@ Inbound server→client messages are also channel-tagged; the Game Worker can pr
 
 See [PRIORITY_CHANNELS_DESIGN.md §8](https://github.com/garnizeh-labs/aetheris-engine/blob/main/docs/PRIORITY_CHANNELS_DESIGN.md#8-bidirectional-priority-processing) for the full bidirectional priority model.
 
+### 3.6 Authoritative Entity Definitions
+
+To ensure UI consistency and early prediction accuracy, the client relies on the protocol's centralized entity definitions. The Game Worker uses `aetheris_protocol::types::get_default_stats()` to determine the maximum HP and Shield values for ships before the server's authoritative `ShipStats` component arrives. This prevents UI "flicker" where a health bar might momentarily appear empty or at a default 100/100 before the true stats are synced.
+
 ### 3.5 Input History Buffer
 
 The client maintains a ring buffer of the last 128 input commands. On receiving a server correction for tick N, it:

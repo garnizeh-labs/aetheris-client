@@ -666,6 +666,7 @@ mod wasm_impl {
                 };
                 let mut updates: Vec<(ClientId, aetheris_protocol::events::ComponentUpdate)> =
                     Vec::new();
+                let mut collected_game_events = Vec::new();
 
                 for event in events {
                     match event {
@@ -697,7 +698,7 @@ mod wasm_impl {
                                                 event: game_event,
                                                 ..
                                             } => {
-                                                self.dispatch_game_event(&game_event);
+                                                collected_game_events.push(game_event);
                                             }
                                             aetheris_protocol::events::NetworkEvent::ClearWorld {
                                                 ..
@@ -806,7 +807,7 @@ mod wasm_impl {
                         NetworkEvent::GameEvent {
                             event: game_event, ..
                         } => {
-                            self.dispatch_game_event(&game_event);
+                            collected_game_events.push(game_event);
                         }
                         #[allow(unreachable_patterns)]
                         _ => {
@@ -849,6 +850,12 @@ mod wasm_impl {
                         self.world_state.apply_updates(&updates);
                     }
                 }
+            }
+
+            // 1.5 Dispatch Collected Game Events
+            // This is done after the transport borrow scope ends to satisfy the borrow checker.
+            for game_event in collected_game_events {
+                self.dispatch_game_event(&game_event);
             }
 
             // 2.5. Fixed-Timestep Simulation Loop (M1020)
@@ -973,7 +980,8 @@ mod wasm_impl {
                     self.world_state.entities.remove(network_id);
 
                     for slot in self.world_state.entities.values_mut() {
-                        if (slot.flags & 0x04) != 0 && slot.mining_target_id == (network_id.0 as u16)
+                        if (slot.flags & 0x04) != 0
+                            && slot.mining_target_id == (network_id.0 as u16)
                         {
                             slot.mining_active = 0;
                             slot.mining_target_id = 0;
@@ -1017,16 +1025,9 @@ mod wasm_impl {
             let statuses: Vec<EntityStatus> = entities
                 .into_iter()
                 .map(|slot| {
-                    // M1020 §3.3: Max vitals are derived from type defaults if not in slot.
-                    // For Phase 1, we use common defaults.
-                    let (max_hp, max_shield) = match slot.entity_type {
-                        1 => (100, 50),    // Scout
-                        2 => (200, 100),   // Interceptor
-                        3 => (500, 0),     // Asteroid
-                        4 => (1000, 500),  // Training Dummy
-                        20 => (1, 0),      // Projectile
-                        _ => (100, 100),
-                    };
+                    // M1020 §3.3: Max vitals are derived from authoritative protocol definitions.
+                    let (max_hp, max_shield) =
+                        aetheris_protocol::types::get_default_stats(slot.entity_type);
 
                     EntityStatus {
                         network_id: slot.network_id.to_string(),
