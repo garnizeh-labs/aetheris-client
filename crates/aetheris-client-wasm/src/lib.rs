@@ -1074,6 +1074,7 @@ mod wasm_impl {
 
             let id = aetheris_protocol::types::NetworkId(self.playground_next_network_id);
             self.playground_next_network_id += 1;
+            let (hp, shield) = aetheris_protocol::types::get_default_stats(entity_type);
             let slot = SabSlot {
                 network_id: id.0,
                 x,
@@ -1083,8 +1084,8 @@ mod wasm_impl {
                 dx: 0.0,
                 dy: 0.0,
                 dz: 0.0,
-                hp: 100,
-                shield: 100,
+                hp,
+                shield,
                 entity_type,
                 flags: 0x01, // ALIVE
                 mining_active: 0,
