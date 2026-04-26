@@ -49,6 +49,8 @@ dependencies = [
 [[package]]
 name = "aetheris-encoder-serde"
 version = "0.2.22"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e0cb690d1f56a35887264bb732b1a07e8a067ab07a8a6115112abf63d1fad163"
 dependencies = [
  "aetheris-protocol",
  "metrics",
@@ -60,6 +62,8 @@ dependencies = [
 [[package]]
 name = "aetheris-protocol"
 version = "0.2.22"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "0e0b6ee7884d74691ba396b3d6494f154425d01f387b377878b1647fd7144b1c"
 dependencies = [
  "async-trait",
  "serde",
@@ -2422,7 +2426,3 @@ name = "zmij"
 version = "1.0.21"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b8848ee67ecc8aedbaf3e4122217aff892639231befc6a1b58d29fff4c2cabaa"
-
-[[patch.unused]]
-name = "aetheris-encoder-bitpack"
-version = "0.2.22"
