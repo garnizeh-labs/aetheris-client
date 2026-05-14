@@ -90,7 +90,7 @@ graph TD
 
 2. **Game Worker independence.** The 60 Hz game loop must not be interrupted by garbage collection, font rendering, or any DOM operation. A dedicated `Worker` provides a clean execution context with its own GC heap, separate from the main thread. A regular `Worker` (not `Worker`) is used so that each browser tab has its own isolated game state — one tab cannot accidentally observe or affect another.
 
-3. **Render Worker with OffscreenCanvas.** WebGPU (`wgpu`) requires a GPU surface. `OffscreenCanvas` transfers surface ownership to the Render Worker, meaning GPU command encoding and submission happen entirely off the main thread. Frame drops caused by a slow GPU never affect input latency.
+3. **Render Worker with OffscreenCanvas.** WebGPU (`wgpu`) requires a GPU surface. `OffscreenCanvas` transfers surface owneragent to the Render Worker, meaning GPU command encoding and submission happen entirely off the main thread. Frame drops caused by a slow GPU never affect input latency.
 
 ---
 
@@ -172,13 +172,13 @@ The client receives the `ChannelRegistry` configuration from the server during t
 - **Combat actions** (fire, ability) → tagged as channel `"combat"` (P1)
 - **Chat messages** → tagged as channel `"cosmetic"` (P5)
 
-Inbound server→client messages are also channel-tagged; the Game Worker can process high-priority updates (own ship state, combat events) before low-priority ones (distant entities, cosmetic effects) if the tick budget is tight.
+Inbound server→client messages are also channel-tagged; the Game Worker can process high-priority updates (own agent state, combat events) before low-priority ones (distant entities, cosmetic effects) if the tick budget is tight.
 
 See [PRIORITY_CHANNELS_DESIGN.md §8](https://github.com/garnizeh-labs/aetheris-engine/blob/main/docs/PRIORITY_CHANNELS_DESIGN.md#8-bidirectional-priority-processing) for the full bidirectional priority model.
 
 ### 3.6 Authoritative Entity Definitions
 
-To ensure UI consistency and early prediction accuracy, the client relies on the protocol's centralized entity definitions. This allows the client to render correct ship models and health bars immediately upon entity spawn, even before the authoritative `ShipStats` component is replicated from the server.
+To ensure UI consistency and early prediction accuracy, the client relies on the protocol's centralized entity definitions. This allows the client to render correct agent models and health bars immediately upon entity spawn, even before the authoritative `AgentStats` component is replicated from the server.
 
 #### 3.6.1 Static Asset Mapping
 
@@ -194,7 +194,7 @@ pub const ENTITY_TYPE_DREADNOUGHT: u16 = 3;
 
 #### 3.6.2 Client-Side Stat Prediction
 
-The Game Worker uses `aetheris_protocol::types::get_default_stats()` to determine the maximum HP and Shield values for ships. This prevents "UI flicker" where a health bar might momentarily appear empty or at a default 100/100 before the true server-side stats are synchronized.
+The Game Worker uses `aetheris_protocol::types::get_default_stats()` to determine the maximum HP and Shield values for agents. This prevents "UI flicker" where a health bar might momentarily appear empty or at a default 100/100 before the true server-side stats are synchronized.
 
 ```rust
 // aetheris-client-wasm/src/lib.rs
@@ -296,7 +296,7 @@ This is the standard technique used by Source Engine, Minecraft, and Valorant.
 
 The main thread:
 
-- Hosts the HTML5 `<canvas>` element (ownership transferred to the Render Worker).
+- Hosts the HTML5 `<canvas>` element (owneragent transferred to the Render Worker).
 - Renders the HUD overlays: health bars, minimap, chat, inventory UI (React/Preact).
 - Captures keyboard and mouse events, forwarding them to the Game Worker via `postMessage`.
 - Receives game events (death, level-up, etc.) from the Game Worker for UI notifications.

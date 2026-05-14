@@ -106,7 +106,7 @@ The Playground simulation is **Client-Authoritative** in Sandbox mode and **Serv
 Every `tick_playground()` call (Sandbox):
 
 1. Increments rotation of every entity if enabled.
-2. **Infinite World (Wrapping)**: Applies toroidal wrapping logic using `rem_euclid` based on the current `RoomBounds` (default 500x500). Entities crossing a boundary re-emerge on the opposite side.
+2. **Infinite World (Wrapping)**: Applies toroidal wrapping logic using `rem_euclid` based on the current `WorkspaceBounds` (default 500x500). Entities crossing a boundary re-emerge on the opposite side.
 3. Advances the local tick counter so the Render Worker receives fresh snapshots.
 4. Commits the current world state to the `SharedWorld` pointer.
 5. The Render Worker picks up the change as usual.
