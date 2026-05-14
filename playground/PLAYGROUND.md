@@ -1,6 +1,6 @@
 # Aetheris Playground — Infrastructure Manual
 
-Broadcasting from the **Authoritative Mode**. The playground has been refactored to align with **VS-01 (One Ship, One Sector)** requirements. It serves as a dedicated validation tool for the server-authoritative pipeline, ensuring that authentication, possession, and flight physics are working correctly within the distributed environment.
+Broadcasting from the **Authoritative Mode**. The playground has been refactored to align with **VS-01 (One Agent, One Sector)** requirements. It serves as a dedicated validation tool for the server-authoritative pipeline, ensuring that authentication, possession, and flight physics are working correctly within the distributed environment.
 
 ---
 
@@ -31,7 +31,7 @@ just playground
 
 ### 1. Session Control
 Once authenticated, you can start a session:
-- **Start Session**: Requests a ship from the server. Upon successful possession, your ship will be spawned in the sector.
+- **Start Session**: Requests a agent from the server. Upon successful possession, your agent will be spawned in the sector.
 - **Stop Session**: Clears the world and disconnects your authoritative entity.
 
 ### 2. Telemetry Panel
@@ -50,7 +50,7 @@ Visual feedback for active input commands being sent to the server.
 ## 📐 Architectural Context
 
 - **Authoritative Validation**: Network authority is always enabled. The client no longer runs a local sandbox simulation; all state transitions are derived from server-replicated snapshots.
-- **VS-01 Compliance**: The scope is strictly limited to "One Ship, One Sector" validation. Extraneous sandbox features (manual spawning, local stress tests) have been removed to ensure the playground remains a focused validation tool.
+- **VS-01 Compliance**: The scope is strictly limited to "One Agent, One Sector" validation. Extraneous sandbox features (manual spawning, local stress tests) have been removed to ensure the playground remains a focused validation tool.
 - **3-Worker Topology**: The **Main, Game, Render** worker model remains active, providing a true-to-life environment for performance benchmarking.
 - **Client-Side Prediction**: Simulation of local player transformations is currently **optional and disabled by default** to ensure absolute parity with server authoritative state during VS-01 validation.
     - **Status**: Pure Server-Authority (Local simulation is OFF).

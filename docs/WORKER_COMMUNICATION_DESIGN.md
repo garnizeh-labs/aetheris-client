@@ -286,7 +286,7 @@ interface WorkerMessage {
 | `'game_event'` | `{ event: string, data: any }` | Death, level-up, achievement, score change |
 | `'document_update'` | `{ docId: string, ops: any[] }` | Platform: collaborative document changes |
 | `'trade_fill'` | `{ orderId: string, price: number, qty: number }` | Platform: trade execution confirmation |
-| `'room_event'` | `{ type: string, roomId: string, ... }` | Room entry/exit/lock/unlock notifications |
+| `'workspace_event'` | `{ type: string, workspaceId: string, ... }` | Workspace entry/exit/lock/unlock notifications |
 | `'error'` | `{ code: string, message: string }` | Generic error from WASM |
 
 ### 5.4 Main Thread → Render Worker Messages
