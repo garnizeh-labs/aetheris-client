@@ -40,26 +40,26 @@ pub struct SabSlot {
     pub dy: f32, // Offset 28, size 4
     /// Velocity vector Z.
     pub dz: f32, // Offset 32, size 4
-    /// Current health points.
-    pub hp: u16, // Offset 36, size 2
-    /// Current shield points.
-    pub shield: u16, // Offset 38, size 2
+    /// Current integrity (health).
+    pub integrity: u16, // Offset 36, size 2
+    /// Current priority (shield).
+    pub priority: u16, // Offset 38, size 2
     /// Entity type identifier.
     pub entity_type: u16, // Offset 40, size 2
     /// Bitfield flags (Alive: 0, Visible: 1, `LocalPlayer`: 2, Interpolate: 3, ...).
     pub flags: u8, // Offset 42, size 1
-    /// Mining state (0: inactive, 1: active).
-    pub mining_active: u8, // Offset 43, size 1
-    /// Current cargo count.
-    pub cargo_ore: u16, // Offset 44, size 2
-    /// Maximum cargo capacity.
-    pub cargo_capacity: u16, // Offset 46, size 2
-    /// Network ID of the mining target (truncated to 16-bit for Phase 1).
-    pub mining_target_id: u16, // Offset 48, size 2
-    /// Network ID of the combat target (truncated to 16-bit for Phase 1).
-    pub combat_target_id: u16, // Offset 50, size 2
-    /// Number of frames to display the combat laser flash.
-    pub combat_flash_ticks: u8, // Offset 52, size 1
+    /// Extraction state (0: inactive, 1: active).
+    pub extraction_active: u8, // Offset 43, size 1
+    /// Current payload count.
+    pub payload_count: u16, // Offset 44, size 2
+    /// Maximum payload capacity.
+    pub payload_capacity: u16, // Offset 46, size 2
+    /// Network ID of the extraction target (truncated to 16-bit for Phase 1).
+    pub extraction_target_id: u16, // Offset 48, size 2
+    /// Network ID of the interaction target (truncated to 16-bit for Phase 1).
+    pub interaction_target_id: u16, // Offset 50, size 2
+    /// Number of frames to display the interaction flash.
+    pub interaction_flash_ticks: u8, // Offset 52, size 1
     /// Padding to maintain 8-byte alignment (`SabSlot` size: 56 bytes).
     pub padding: [u8; 3], // Offset 53, size 3
 }
@@ -78,12 +78,12 @@ pub struct SabHeader {
     pub state: AtomicU64, // Offset 0
     /// The latest server tick corresponding to the data in the active buffer.
     pub tick: AtomicU64, // Offset 8
-    pub room_min_x: core::sync::atomic::AtomicU32, // Offset 16
-    pub room_min_y: core::sync::atomic::AtomicU32, // Offset 20
-    pub room_max_x: core::sync::atomic::AtomicU32, // Offset 24
-    pub room_max_y: core::sync::atomic::AtomicU32, // Offset 28
-    /// Seqlock counter for room bounds. Odd = write in progress; even = stable.
-    pub room_bounds_seq: core::sync::atomic::AtomicU32, // Offset 32
+    pub workspace_min_x: core::sync::atomic::AtomicU32, // Offset 16
+    pub workspace_min_y: core::sync::atomic::AtomicU32, // Offset 20
+    pub workspace_max_x: core::sync::atomic::AtomicU32, // Offset 24
+    pub workspace_max_y: core::sync::atomic::AtomicU32, // Offset 28
+    /// Seqlock counter for workspace bounds. Odd = write in progress; even = stable.
+    pub workspace_bounds_seq: core::sync::atomic::AtomicU32, // Offset 32
     /// Sub-tick progress (0.0 to 1.0) for visual interpolation.
     pub sub_tick_fraction: core::sync::atomic::AtomicU32, // Offset 36
 }
@@ -191,7 +191,7 @@ impl SharedWorld {
     }
 
     /// Updates the sub-tick progress fraction.
-    pub fn set_sub_tick_fraction(&mut self, fraction: f32) {
+    pub fn set_sub_tick_fraction(&self, fraction: f32) {
         self.header()
             .sub_tick_fraction
             .store(fraction.to_bits(), Ordering::Release);
@@ -206,8 +206,8 @@ impl SharedWorld {
     }
 
     /// Returns a mutable slice of the entities in the buffer index i.
-    #[allow(clippy::cast_ptr_alignment)]
-    fn get_buffer_mut(&mut self, idx: usize) -> &mut [SabSlot] {
+    #[allow(clippy::cast_ptr_alignment, clippy::mut_from_ref)]
+    fn get_buffer_mut(&self, idx: usize) -> &mut [SabSlot] {
         let offset = core::mem::size_of::<SabHeader>()
             + (idx * MAX_ENTITIES * core::mem::size_of::<SabSlot>());
         unsafe {
@@ -229,14 +229,14 @@ impl SharedWorld {
 
     /// Returns the buffer currently available for writing (inactive buffer).
     #[must_use]
-    pub fn get_write_buffer(&mut self) -> &mut [SabSlot] {
+    pub fn get_write_buffer(&self) -> &mut [SabSlot] {
         let active = self.active_index() as usize;
         let inactive = 1 - active;
         self.get_buffer_mut(inactive)
     }
 
     /// Swaps the active buffer and updates the entity count and tick.
-    pub fn commit_write(&mut self, entity_count: u32, tick: u64) {
+    pub fn commit_write(&self, entity_count: u32, tick: u64) {
         let active = self.active_index();
         let next_active = 1 - active;
 
@@ -245,44 +245,44 @@ impl SharedWorld {
         self.header().state.store(packed, Ordering::Release);
     }
 
-    /// Updates the room bounds using a seqlock so readers always see a consistent
+    /// Updates the workspace bounds using a seqlock so readers always see a consistent
     /// rectangle. The sequence number is bumped to an odd value before writing and
     /// back to an even value (with `Release` ordering) after, matching the acquire
-    /// fence in `get_room_bounds`.
-    pub fn set_room_bounds(&mut self, min_x: f32, min_y: f32, max_x: f32, max_y: f32) {
+    /// fence in `get_workspace_bounds`.
+    pub fn set_workspace_bounds(&self, min_x: f32, min_y: f32, max_x: f32, max_y: f32) {
         let h = self.header();
-        let seq = h.room_bounds_seq.load(Ordering::Relaxed);
+        let seq = h.workspace_bounds_seq.load(Ordering::Relaxed);
         // Mark write in progress: odd sequence number.
-        h.room_bounds_seq
+        h.workspace_bounds_seq
             .store(seq.wrapping_add(1), Ordering::Relaxed);
         core::sync::atomic::fence(Ordering::Release);
-        h.room_min_x.store(min_x.to_bits(), Ordering::Relaxed);
-        h.room_min_y.store(min_y.to_bits(), Ordering::Relaxed);
-        h.room_max_x.store(max_x.to_bits(), Ordering::Relaxed);
-        h.room_max_y.store(max_y.to_bits(), Ordering::Relaxed);
+        h.workspace_min_x.store(min_x.to_bits(), Ordering::Relaxed);
+        h.workspace_min_y.store(min_y.to_bits(), Ordering::Relaxed);
+        h.workspace_max_x.store(max_x.to_bits(), Ordering::Relaxed);
+        h.workspace_max_y.store(max_y.to_bits(), Ordering::Relaxed);
         // Mark write complete: even sequence number, visible to readers.
-        h.room_bounds_seq
+        h.workspace_bounds_seq
             .store(seq.wrapping_add(2), Ordering::Release);
     }
 
-    /// Reads the room bounds, retrying if a concurrent write is detected via the
+    /// Reads the workspace bounds, retrying if a concurrent write is detected via the
     /// seqlock. Guaranteed to return a consistent (non-torn) rectangle.
     #[must_use]
-    pub fn get_room_bounds(&self) -> (f32, f32, f32, f32) {
+    pub fn get_workspace_bounds(&self) -> (f32, f32, f32, f32) {
         let h = self.header();
         loop {
-            let seq1 = h.room_bounds_seq.load(Ordering::Acquire);
+            let seq1 = h.workspace_bounds_seq.load(Ordering::Acquire);
             if seq1 & 1 != 0 {
                 // Write in progress — spin.
                 core::hint::spin_loop();
                 continue;
             }
-            let min_x = f32::from_bits(h.room_min_x.load(Ordering::Relaxed));
-            let min_y = f32::from_bits(h.room_min_y.load(Ordering::Relaxed));
-            let max_x = f32::from_bits(h.room_max_x.load(Ordering::Relaxed));
-            let max_y = f32::from_bits(h.room_max_y.load(Ordering::Relaxed));
+            let min_x = f32::from_bits(h.workspace_min_x.load(Ordering::Relaxed));
+            let min_y = f32::from_bits(h.workspace_min_y.load(Ordering::Relaxed));
+            let max_x = f32::from_bits(h.workspace_max_x.load(Ordering::Relaxed));
+            let max_y = f32::from_bits(h.workspace_max_y.load(Ordering::Relaxed));
             core::sync::atomic::fence(Ordering::Acquire);
-            let seq2 = h.room_bounds_seq.load(Ordering::Relaxed);
+            let seq2 = h.workspace_bounds_seq.load(Ordering::Relaxed);
             if seq1 == seq2 {
                 return (min_x, min_y, max_x, max_y);
             }

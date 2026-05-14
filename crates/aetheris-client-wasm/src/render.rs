@@ -279,7 +279,7 @@ pub struct RenderState {
     laser_vertex_buffer: Buffer,
 
     clear_color: wgpu::Color,
-    room_bounds: (f32, f32, f32, f32),
+    workspace_bounds: (f32, f32, f32, f32),
 
     // Performance tracking
     last_frame_time: f64,
@@ -292,7 +292,7 @@ pub struct RenderState {
     view_state: ViewState,
     roaming_timer: f32,
     entering_timer: f32,
-    arrival_ship_alpha: f32,
+    arrival_agent_alpha: f32,
 }
 
 impl RenderState {
@@ -462,12 +462,12 @@ impl RenderState {
 
         add_primitive(
             1_u16,
-            crate::render_primitives::create_interceptor_mesh(),
+            crate::render_primitives::create_interceptor_mesh(), // Agent Mesh
             [0.2, 0.6, 1.0, 1.0],
         );
         add_primitive(
             3_u16,
-            crate::render_primitives::create_dreadnought_mesh(),
+            crate::render_primitives::create_dreadnought_mesh(), // HeavyAgent Mesh
             [0.8, 0.2, 0.2, 1.0],
         );
         add_primitive(
@@ -477,18 +477,18 @@ impl RenderState {
         );
         add_primitive(
             5_u16,
-            crate::render_primitives::create_asteroid_mesh(),
+            crate::render_primitives::create_resource_mesh(),
             [0.5, 0.4, 0.3, 1.0],
         );
         add_primitive(
             6_u16,
             crate::render_primitives::create_cube_mesh(0.4, 0.4, 0.4),
-            [0.8, 0.8, 0.2, 1.0], // Cargo Yellow
+            [0.8, 0.8, 0.2, 1.0], // Payload Yellow
         );
         add_primitive(
             20_u16,
-            crate::render_primitives::create_projectile_mesh(),
-            [1.0, 1.0, 0.0, 1.0], // Projectile Vibrant Neon Yellow
+            crate::render_primitives::create_beam_mesh(),
+            [1.0, 1.0, 0.0, 1.0], // Beam Vibrant Neon Yellow
         );
         add_primitive(
             10_u16,
@@ -805,14 +805,14 @@ impl RenderState {
                 b: 0.02,
                 a: 1.0,
             },
-            room_bounds: (0.0, 0.0, 0.0, 0.0),
+            workspace_bounds: (0.0, 0.0, 0.0, 0.0),
             last_frame_time: crate::performance_now(),
             speed_shake_enabled: true,
             latest_player_speed: 0.0,
             view_state: ViewState::Logo,
             roaming_timer: 0.0,
             entering_timer: 0.0,
-            arrival_ship_alpha: 0.0,
+            arrival_agent_alpha: 0.0,
         })
     }
 
@@ -862,7 +862,7 @@ impl RenderState {
         }
         if state == ViewState::Entering {
             self.entering_timer = 0.0;
-            self.arrival_ship_alpha = 0.0;
+            self.arrival_agent_alpha = 0.0;
         }
     }
 
@@ -870,8 +870,8 @@ impl RenderState {
         self.clear_color = color;
     }
 
-    pub fn set_room_bounds(&mut self, bounds: (f32, f32, f32, f32)) {
-        self.room_bounds = bounds;
+    pub fn set_workspace_bounds(&mut self, bounds: (f32, f32, f32, f32)) {
+        self.workspace_bounds = bounds;
     }
 
     #[cfg(debug_assertions)]
@@ -938,8 +938,8 @@ impl RenderState {
         // 1. Update Camera Position (Smooth Follow)
         let lerp_factor = (1.0 - (-15.0 * dt).exp()).clamp(0.0, 1.0);
 
-        let world_width = self.room_bounds.2 - self.room_bounds.0;
-        let world_height = self.room_bounds.3 - self.room_bounds.1;
+        let world_width = self.workspace_bounds.2 - self.workspace_bounds.0;
+        let world_height = self.workspace_bounds.3 - self.workspace_bounds.1;
 
         // M10156 — ViewState Camera Logic
         match self.view_state {
@@ -969,13 +969,13 @@ impl RenderState {
                 self.camera_zoom = 15.0;
                 self.camera_current = self.camera_current.lerp(self.camera_target, lerp_factor);
 
-                // 2. Animate ship arrival (visual only)
+                // 2. Animate agent arrival (visual only)
                 // Start arrival after 0.5s of camera stabilization
                 if self.entering_timer > 0.5 {
-                    let ship_t = ((self.entering_timer - 0.5) / (anim_duration - 1.0)).min(1.0);
+                    let agent_t = ((self.entering_timer - 0.5) / (anim_duration - 1.0)).min(1.0);
                     // Ease out quadratic
-                    let ship_ease = 1.0 - (1.0 - ship_t) * (1.0 - ship_t);
-                    self.arrival_ship_alpha = ship_ease;
+                    let agent_ease = 1.0 - (1.0 - agent_t) * (1.0 - agent_t);
+                    self.arrival_agent_alpha = agent_ease;
                 }
             }
             ViewState::Playing => {
@@ -993,13 +993,13 @@ impl RenderState {
                     self.camera_current.y += dy * lerp_factor;
                     self.camera_current.z = self.camera_target.z;
 
-                    // Normalize camera center to stay within canonical room bounds [min, max)
-                    self.camera_current.x = (self.camera_current.x - self.room_bounds.0)
+                    // Normalize camera center to stay within canonical workspace bounds [min, max)
+                    self.camera_current.x = (self.camera_current.x - self.workspace_bounds.0)
                         .rem_euclid(world_width)
-                        + self.room_bounds.0;
-                    self.camera_current.y = (self.camera_current.y - self.room_bounds.1)
+                        + self.workspace_bounds.0;
+                    self.camera_current.y = (self.camera_current.y - self.workspace_bounds.1)
                         .rem_euclid(world_height)
-                        + self.room_bounds.1;
+                        + self.workspace_bounds.1;
                 } else {
                     self.camera_current = self.camera_current.lerp(self.camera_target, lerp_factor);
                 }
@@ -1040,8 +1040,8 @@ impl RenderState {
             world_size: [
                 world_width,
                 world_height,
-                self.room_bounds.0,
-                self.room_bounds.1,
+                self.workspace_bounds.0,
+                self.workspace_bounds.1,
             ],
             camera_pos: [camera_final_pos.x, camera_final_pos.y],
             _padding: [0.0, 0.0],
@@ -1139,12 +1139,12 @@ impl RenderState {
                                 network_id = ent.network_id,
                                 x = ent.x,
                                 y = ent.y,
-                                "RENDERING PROJECTILE"
+                                "RENDERING BEAM"
                             );
                         }
 
                         let mut color = primitive.color;
-                        if ent.combat_flash_ticks > 0 {
+                        if ent.interaction_flash_ticks > 0 {
                             color = [1.0, 1.0, 1.0, 1.0]; // Flash white
                         }
 
@@ -1158,12 +1158,12 @@ impl RenderState {
                     }
                 }
             } else if self.view_state == ViewState::Entering {
-                // Render the "Arrival Ship" (visual only)
+                // Render the "Arrival Agent" (visual only)
                 if let Some(primitive) = self.primitives.get(&1) {
-                    // Interceptor
-                    let alpha = self.arrival_ship_alpha;
+                    // Agent
+                    let alpha = self.arrival_agent_alpha;
                     if alpha > 0.01 {
-                        // Ship arrives from bottom-right (20, -20) to (0,0)
+                        // Agent arrives from bottom-right (20, -20) to (0,0)
                         let start_pos = Vec3::new(20.0, -20.0, 0.0);
                         let end_pos = Vec3::ZERO;
                         let current_pos = start_pos.lerp(end_pos, alpha);
@@ -1234,7 +1234,7 @@ impl RenderState {
                 }
             }
 
-            // 5.5. Draw Lasers (Mining Beams)
+            // 5.5. Draw Lasers (Extraction Beams)
             let mut laser_vertices = Vec::new();
 
             // O(n) Optimization: Pre-build target map for O(1) lookups in the loop
@@ -1244,10 +1244,10 @@ impl RenderState {
                 .collect();
 
             for ent in &sorted_entities {
-                // Mining Beams (Sustained)
-                if ent.mining_active != 0 && ent.mining_target_id != 0 {
+                // Extraction Beams (Sustained)
+                if ent.extraction_active != 0 && ent.extraction_target_id != 0 {
                     let start = Vec3::new(ent.x, ent.y, 0.0);
-                    if let Some(target) = target_map.get(&ent.mining_target_id) {
+                    if let Some(target) = target_map.get(&ent.extraction_target_id) {
                         let end = Vec3::new(target.x, target.y, 0.0);
                         let core_color = [1.0, 1.0, 1.0, 1.0];
                         let glow_color = [1.0, 0.4, 0.0, 0.5]; // Orange glow
@@ -1281,9 +1281,9 @@ impl RenderState {
                     }
                 }
 
-                // Combat Lasers (Discrete Flashes) - Removed in favor of projectiles
+                // Interaction Lasers (Discrete Flashes) - Removed in favor of beams
                 /*
-                if ent.combat_flash_ticks > 0 && ent.combat_target_id != 0 {
+                if ent.interaction_flash_ticks > 0 && ent.interaction_target_id != 0 {
                     ...
                 }
                 */
@@ -1379,15 +1379,15 @@ impl RenderState {
             // B. Entity Debug Info
             // B. Entity Debug Info (using DebugDrawable trait)
             if self.debug_mode != DebugRenderMode::Off {
-                // Draw Room Bounds
-                if self.room_bounds.2 > self.room_bounds.0 {
+                // Draw Workspace Bounds
+                if self.workspace_bounds.2 > self.workspace_bounds.0 {
                     let mut bounds_color = self.label_color;
                     bounds_color[1] *= 0.5; // Slight tint
                     self.debug_draw.add_rect_3d(
-                        self.room_bounds.0,
-                        self.room_bounds.1,
-                        self.room_bounds.2,
-                        self.room_bounds.3,
+                        self.workspace_bounds.0,
+                        self.workspace_bounds.1,
+                        self.workspace_bounds.2,
+                        self.workspace_bounds.3,
                         bounds_color,
                     );
                 }

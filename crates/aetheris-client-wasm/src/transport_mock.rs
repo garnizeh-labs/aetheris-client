@@ -1,5 +1,5 @@
 use aetheris_protocol::events::NetworkEvent;
-use aetheris_protocol::traits::{GameTransport, TransportError};
+use aetheris_protocol::traits::{PlatformTransport, TransportError};
 use aetheris_protocol::types::ClientId;
 use async_trait::async_trait;
 use std::collections::VecDeque;
@@ -30,7 +30,7 @@ impl MockTransport {
 
 #[cfg_attr(target_arch = "wasm32", async_trait(?Send))]
 #[cfg_attr(not(target_arch = "wasm32"), async_trait)]
-impl GameTransport for MockTransport {
+impl PlatformTransport for MockTransport {
     async fn send_unreliable(
         &self,
         client_id: ClientId,
@@ -73,5 +73,10 @@ impl GameTransport for MockTransport {
         } else {
             1
         }
+    }
+
+    async fn disconnect(&self, _client_id: ClientId) -> Result<(), TransportError> {
+        *self.is_closed.lock().unwrap() = true;
+        Ok(())
     }
 }

@@ -29,10 +29,10 @@ const AEB_MAGIC: [u8; 4] = *b"AEB\x01";
 #[cfg_attr(target_arch = "wasm32", wasm_bindgen)]
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum AssetHandle {
-    Interceptor = 1,
-    Dreadnought = 2,
-    Asteroid = 3,
-    Projectile = 4,
+    Agent = 1,
+    HeavyAgent = 2,
+    Resource = 3,
+    Beam = 4,
 }
 
 /// Registry for managing game assets (meshes, textures).
@@ -52,20 +52,20 @@ impl AssetRegistry {
 
         // Seed with procedural defaults for Phase 1
         registry.meshes.insert(
-            AssetHandle::Interceptor,
+            AssetHandle::Agent,
             crate::render_primitives::create_interceptor_mesh(),
         );
         registry.meshes.insert(
-            AssetHandle::Dreadnought,
+            AssetHandle::HeavyAgent,
             crate::render_primitives::create_dreadnought_mesh(),
         );
         registry.meshes.insert(
-            AssetHandle::Asteroid,
-            crate::render_primitives::create_asteroid_mesh(),
+            AssetHandle::Resource,
+            crate::render_primitives::create_resource_mesh(),
         );
         registry.meshes.insert(
-            AssetHandle::Projectile,
-            crate::render_primitives::create_projectile_mesh(),
+            AssetHandle::Beam,
+            crate::render_primitives::create_beam_mesh(),
         );
 
         registry

@@ -14,7 +14,7 @@ pub struct MeshData {
     pub indices: Vec<u16>,
 }
 
-/// Generates a sharp pyramid-like ship for the Interceptor.
+/// Generates a sharp pyramid-like agent for the Standard kind.
 pub fn create_interceptor_mesh() -> MeshData {
     let mut vertices = Vec::new();
 
@@ -54,7 +54,7 @@ pub fn create_interceptor_mesh() -> MeshData {
     MeshData { vertices, indices }
 }
 
-/// Generates a bulky blocky ship for the Dreadnought.
+/// Generates a bulky blocky agent for the Heavy kind.
 pub fn create_dreadnought_mesh() -> MeshData {
     // Bulky cube-shaped mesh (width w, height h, length l)
     let h = 0.5;
@@ -179,7 +179,7 @@ pub fn create_cube_mesh(w: f32, h: f32, l: f32) -> MeshData {
     MeshData { vertices, indices }
 }
 
-pub fn create_asteroid_mesh() -> MeshData {
+pub fn create_resource_mesh() -> MeshData {
     // Low-poly octahedron with per-face normals computed via cross product.
     let mut vertices = Vec::new();
 
@@ -225,7 +225,7 @@ pub fn create_asteroid_mesh() -> MeshData {
     MeshData { vertices, indices }
 }
 
-pub fn create_projectile_mesh() -> MeshData {
+pub fn create_beam_mesh() -> MeshData {
     // Small diamond (bipyramid) with per-face normals computed via cross product.
     let mut vertices = Vec::new();
 
