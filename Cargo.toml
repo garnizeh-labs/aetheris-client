@@ -20,8 +20,8 @@ aetheris-client-wasm = { path = "crates/aetheris-client-wasm", version = "0.3.24
 aetheris-client-native = { path = "crates/aetheris-client-native", version = "0.3.24" }
 
 # Protocol (published — garnizeh-labs/aetheris-protocol)
-aetheris-protocol = { version = "0.2.22" }
-aetheris-encoder-serde = { version = "0.2.22" }
+aetheris-protocol = { version = "0.2.23" }
+aetheris-encoder-serde = { version = "0.2.23" }
 
 # Core Traits & Utilities
 thiserror = "2.0.18"
@@ -73,5 +73,9 @@ lto = true        # Link-time optimization
 strip = "symbols" # Remove symbols
 panic = "abort"   # Save ~50KB per WASM bin
 codegen-units = 1 # Better LTO
+
+[patch.crates-io]
+# aetheris-protocol = { path = "../aetheris-protocol/crates/aetheris-protocol" }
+# aetheris-encoder-serde = { path = "../aetheris-protocol/crates/aetheris-encoder-serde" }
 
 

@@ -125,8 +125,8 @@ pub struct MetricsSnapshot {
     pub entity_count: u32,
     pub snapshot_count: u32,
     pub dropped_events: u32,
-    pub cargo_ore: u32,
-    pub cargo_capacity: u32,
+    pub payload_count: u32,
+    pub payload_capacity: u32,
 }
 
 // ---------------------------------------------------------------------------
@@ -261,9 +261,9 @@ pub struct MetricsCollector {
     // Snapshot buffer depth (render interpolation)
     snapshot_count: u32,
 
-    // Cargo hold status (for player ship)
-    cargo_ore: u32,
-    cargo_capacity: u32,
+    // Payload status (for player agent)
+    payload_count: u32,
+    payload_capacity: u32,
 
     // Flush endpoint
     telemetry_url: String,
@@ -291,8 +291,8 @@ impl MetricsCollector {
             last_rtt_ms: None,
             entity_count: 0,
             snapshot_count: 0,
-            cargo_ore: 0,
-            cargo_capacity: 0,
+            payload_count: 0,
+            payload_capacity: 0,
             telemetry_url,
             session_id,
             trace_id,
@@ -331,10 +331,10 @@ impl MetricsCollector {
         self.snapshot_count = count;
     }
 
-    /// Update cargo hold status.
-    pub fn update_cargo(&mut self, ore: u32, capacity: u32) {
-        self.cargo_ore = ore;
-        self.cargo_capacity = capacity;
+    /// Update payload status.
+    pub fn update_payload(&mut self, count: u32, capacity: u32) {
+        self.payload_count = count;
+        self.payload_capacity = capacity;
     }
 
     /// Push a structured lifecycle / error event.
@@ -364,7 +364,7 @@ impl MetricsCollector {
     /// Snapshot current metrics and push them as a single INFO event,
     /// then drain the ring buffer and fire-and-forget POST to /telemetry/json.
     ///
-    /// Safe to call before `AetherisClient::new()` (satisfies M10105 AC-01).
+    /// Safe to call before `PlatformClient::new()` (satisfies M10105 AC-01).
     /// Uses `spawn_local` so it never blocks the caller.
     pub fn flush(&mut self) {
         self.flush_internal(false);
@@ -390,7 +390,7 @@ impl MetricsCollector {
             self.entity_count,
             self.snapshot_count,
             self.ring.dropped,
-            format!("cargo={}/{}", self.cargo_ore, self.cargo_capacity),
+            format!("payload={}/{}", self.payload_count, self.payload_capacity),
         );
 
         self.push_event(1, "metrics", &summary, "metrics_snapshot", self.last_rtt_ms);
@@ -430,8 +430,8 @@ impl MetricsCollector {
             entity_count: self.entity_count,
             snapshot_count: self.snapshot_count,
             dropped_events: self.ring.dropped,
-            cargo_ore: self.cargo_ore,
-            cargo_capacity: self.cargo_capacity,
+            payload_count: self.payload_count,
+            payload_capacity: self.payload_capacity,
         }
     }
 }
@@ -532,8 +532,8 @@ pub fn wasm_flush_telemetry() {
     });
 }
 
-/// Initialize the global collector. Called once from `AetherisClient::new()`
-/// or directly from `game.worker.ts` before any `AetherisClient` is created
+/// Initialize the global collector. Called once from `PlatformClient::new()`
+/// or directly from `game.worker.ts` before any `PlatformClient` is created
 /// (satisfies M10105 AC-01: flush available before `new()`).
 ///
 /// ULID pair (`session_id` + `trace_id`) is generated internally — no JS-side

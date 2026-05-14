@@ -1,7 +1,7 @@
 use aetheris_protocol::{
     MAX_SAFE_PAYLOAD_SIZE,
     events::NetworkEvent,
-    traits::{GameTransport, TransportError},
+    traits::{PlatformTransport, TransportError},
     types::ClientId,
 };
 use async_trait::async_trait;
@@ -138,7 +138,11 @@ impl WebTransportBridge {
                         }
                     }
                     Err(e) => {
-                        web_sys::console::error_2(&"WebTransport reader.read() failed:".into(), &e);
+                        // M10163: Silent on reader failure during session close
+                        web_sys::console::warn_2(
+                            &"WebTransport datagram reader closed:".into(),
+                            &e,
+                        );
                         if let Ok(mut c) = read_closed.lock() {
                             *c = true;
                         }
@@ -147,6 +151,18 @@ impl WebTransportBridge {
                 }
             }
         });
+
+        // 5.5. Handle transport closure promise to avoid "Uncaught (in promise)"
+        // The .closed property is a promise that rejects if the session ends with an error.
+        if let Ok(closed_promise) = js_sys::Reflect::get(&transport, &"closed".into()) {
+            wasm_bindgen_futures::spawn_local(async move {
+                let _ = wasm_bindgen_futures::JsFuture::from(
+                    closed_promise.unchecked_into::<js_sys::Promise>(),
+                )
+                .await;
+                tracing::debug!("WebTransport session closure promise settled");
+            });
+        }
 
         // 6. Spawn background reliable stream reading loop
         let stream_read_queue = Arc::clone(&event_queue);
@@ -216,12 +232,14 @@ impl WebTransportBridge {
                         });
                     }
                     Err(e) => {
-                        web_sys::console::error_2(
-                            &"WebTransport incoming streams reader failed:".into(),
-                            &e,
-                        );
+                        // M10163: Using warn instead of error since this is expected on session close/kick
+                        web_sys::console::warn_2(&"WebTransport session closed:".into(), &e);
                         if let Ok(mut c) = stream_closed.lock() {
                             *c = true;
+                        }
+                        // Push a local Disconnected event to notify the state machine
+                        if let Ok(mut q) = stream_read_queue.lock() {
+                            q.push_back(NetworkEvent::Disconnected(ClientId(0)));
                         }
                         break;
                     }
@@ -238,17 +256,33 @@ impl WebTransportBridge {
         })
     }
 
-    fn check_worker(&self) {
+    pub fn check_worker(&self) {
         assert_eq!(
             self.worker_id,
             crate::get_worker_id(),
             "WebTransportBridge accessed from wrong worker! It is pin-bound to its creating thread."
         );
     }
+
+    /// Sends a raw authentication token as the first message of a new stream.
+    /// Required by the Aetheris Server's WebTransport handshake.
+    pub async fn send_raw_auth_token(&self, token: &str) -> Result<(), JsValue> {
+        self.check_worker();
+        let bi_stream: WebTransportBidirectionalStream =
+            JsFuture::from(self.transport.create_bidirectional_stream())
+                .await?
+                .unchecked_into();
+
+        let writer: WritableStreamDefaultWriter = bi_stream.writable().get_writer()?;
+        let uint8 = Uint8Array::from(token.as_bytes());
+        JsFuture::from(writer.write_with_chunk(&uint8)).await?;
+        JsFuture::from(writer.close()).await?;
+        Ok(())
+    }
 }
 
 #[async_trait(?Send)]
-impl GameTransport for WebTransportBridge {
+impl PlatformTransport for WebTransportBridge {
     async fn send_unreliable(
         &self,
         _client_id: ClientId,
@@ -337,5 +371,11 @@ impl GameTransport for WebTransportBridge {
 
     async fn connected_client_count(&self) -> usize {
         1 // On the client, we are only ever connected to 1 server.
+    }
+
+    async fn disconnect(&self, _client_id: ClientId) -> Result<(), TransportError> {
+        self.check_worker();
+        self.transport.close();
+        Ok(())
     }
 }

@@ -656,7 +656,7 @@ class AetherisPlayground {
 
             this.entityCount = 1;
             this.updateEntityCount();
-            this.statusEl.innerText = 'SESSION STARTED — Awaiting Ship Possession';
+            this.statusEl.innerText = 'SESSION STARTED — Awaiting Agent Possession';
         }, 2400);
     }
 
@@ -696,7 +696,7 @@ class AetherisPlayground {
             btn.style.display = 'block';
             if (spawnBtn) spawnBtn.style.display = 'block';
         } else {
-            btn.innerText = 'Start Session (Spawn Ship)';
+            btn.innerText = 'Start Session (Spawn Agent)';
             btn.classList.add('primary');
             btn.classList.remove('danger');
             btn.style.display = 'block';
