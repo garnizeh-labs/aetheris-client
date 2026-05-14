@@ -2,3 +2,9 @@
 # Use the existing cliff.toml for changelog generation
 changelog_config = "cliff.toml"
 # The default changelog path is CHANGELOG.md
+#
+# Disable semver-check: old published commits had active [patch.crates-io]
+# path overrides (aetheris-encoder-bitpack etc.) that do not exist in the
+# CI runner's isolated tmp directory, causing 'cargo package' to fail.
+# cargo-semver-checks is already run separately in the main CI workflow.
+semver_check = false
