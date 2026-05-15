@@ -94,3 +94,5 @@ rand = { workspace = true }
 [features]
 metrics = ["dep:metrics"]
 nightly = []
+
+# Trigger release 0.3.27

@@ -13,3 +13,5 @@ name = "aetheris-client-native"
 path = "src/main.rs"
 
 [dependencies]
+
+# Trigger release 0.3.27
