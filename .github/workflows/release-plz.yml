@@ -45,6 +45,8 @@ jobs:
 
       - name: Run release-plz
         uses: release-plz/action@49c995b2442b0f60dd4aab07a164cc00643471fc # v0.5.128
+        with:
+          command: release # Força rodar APENAS o release para publicar a v26 ignorando o release-pr quebrado
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
