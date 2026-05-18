@@ -835,6 +835,31 @@ mod wasm_impl {
                                                     "Entity spawned via decoded ReliableMessage (awaiting replication)"
                                                 );
                                             }
+                                            aetheris_protocol::events::NetworkEvent::ReplicationBatch {
+                                                events,
+                                                client_id,
+                                            } => {
+                                                let last_clear_tick = *self.last_clear_tick.borrow();
+                                                tracing::debug!(
+                                                    count = events.len(),
+                                                    "Received ReplicationBatch via decoded message"
+                                                );
+                                                for event in events {
+                                                    if last_clear_tick == 0
+                                                        || event.tick > last_clear_tick
+                                                    {
+                                                        updates.push((
+                                                            client_id,
+                                                            aetheris_protocol::events::ComponentUpdate {
+                                                                network_id: event.network_id,
+                                                                component_kind: event.component_kind,
+                                                                payload: event.payload,
+                                                                tick: event.tick,
+                                                            },
+                                                        ));
+                                                    }
+                                                }
+                                            }
                                             _ => {}
                                         }
                                     } else {
@@ -897,6 +922,7 @@ mod wasm_impl {
                         }
                         NetworkEvent::ReplicationBatch { events, client_id } => {
                             let last_clear_tick = *self.last_clear_tick.borrow();
+                            tracing::debug!(count = events.len(), "Received ReplicationBatch");
                             for event in events {
                                 if last_clear_tick == 0 || event.tick > last_clear_tick {
                                     updates.push((
@@ -961,6 +987,11 @@ mod wasm_impl {
                 } else {
                     if !updates.is_empty() {
                         let max_tick = updates.iter().map(|(_, u)| u.tick).max().unwrap_or(0);
+                        tracing::debug!(
+                            updates_count = updates.len(),
+                            max_tick,
+                            "Applying updates to world state"
+                        );
 
                         let mut world = self.world_state.borrow_mut();
                         if max_tick > 0 {
@@ -1210,38 +1241,93 @@ mod wasm_impl {
             }
         }
 
+        /// Drains and returns all buffered extended component updates (kinds >= 0x1000).
+        /// Each item is `{ kind: number, network_id: number, payload: number[], tick: number }`.
+        /// Call this each tick from a platform extension to process proprietary component kinds.
         #[wasm_bindgen]
-        pub fn get_presence(&self) -> JsValue {
+        pub fn drain_extended_components(&self) -> JsValue {
             #[derive(serde::Serialize)]
-            struct PresenceInfo {
-                id: String,
-                x: f32,
-                y: f32,
-                name: String,
+            struct ExtComponent {
+                kind: u16,
+                network_id: u64,
+                payload: Vec<u8>,
+                tick: u64,
             }
 
-            let world = self.world_state.borrow();
-            let presences: Vec<PresenceInfo> = world
-                .entities
-                .iter()
-                .filter(|(_, slot)| slot.entity_type == 0x2007)
-                .map(|(id, slot)| PresenceInfo {
-                    id: id.0.to_string(),
-                    x: slot.x,
-                    y: slot.y,
-                    name: format!("User {}", id.0),
+            let mut world = self.world_state.borrow_mut();
+            let drained: Vec<ExtComponent> = world
+                .extended_component_buffer
+                .drain(..)
+                .map(|u| ExtComponent {
+                    kind: u.component_kind.0,
+                    network_id: u.network_id.0,
+                    payload: u.payload,
+                    tick: u.tick,
                 })
                 .collect();
 
-            match serde_wasm_bindgen::to_value(&presences) {
+            match serde_wasm_bindgen::to_value(&drained) {
                 Ok(val) => val,
-                Err(e) => {
-                    web_sys::console::warn_1(&wasm_bindgen::JsValue::from_str(&format!(
-                        "get_presence: serde_wasm_bindgen::to_value failed: {e}"
-                    )));
-                    wasm_bindgen::JsValue::NULL
-                }
+                Err(_) => wasm_bindgen::JsValue::NULL,
             }
+        }
+
+        /// Sets the position and entity_type of an entity slot.
+        /// Used by platform extensions to update entities from proprietary component payloads.
+        #[wasm_bindgen]
+        pub fn set_entity_extended_state(&self, network_id: u64, x: f32, y: f32, entity_type: u16) {
+            let mut world = self.world_state.borrow_mut();
+            if let Some(entry) = world
+                .entities
+                .get_mut(&aetheris_protocol::types::NetworkId(network_id))
+            {
+                entry.x = x;
+                entry.y = y;
+                entry.entity_type = entity_type;
+            }
+        }
+
+        /// Sends an arbitrary component event as a reliable message.
+        /// Used by platform extensions to send proprietary component kinds to the server.
+        #[wasm_bindgen]
+        pub async fn send_component_event(
+            &self,
+            component_kind: u16,
+            network_id: u64,
+            payload: Vec<u8>,
+            tick: u64,
+        ) -> Result<(), JsValue> {
+            self.check_worker();
+            let encoder = SerdeEncoder::new();
+            let event = aetheris_protocol::events::ReplicationEvent {
+                network_id: aetheris_protocol::types::NetworkId(network_id),
+                component_kind: aetheris_protocol::types::ComponentKind(component_kind),
+                payload,
+                tick,
+            };
+            let mut buffer = [0u8; 1200];
+            let size = encoder
+                .encode(&event, &mut buffer)
+                .map_err(|e| JsValue::from_str(&e.to_string()))?;
+            let data = &buffer[..size];
+
+            let send_fut = {
+                let mut transport_guard = self.transport.borrow_mut();
+                if let Some(transport) = &mut *transport_guard {
+                    let t: *mut dyn aetheris_protocol::traits::PlatformTransport = &mut **transport;
+                    Some(
+                        unsafe { &mut *t }
+                            .send_reliable(aetheris_protocol::types::ClientId(0), data),
+                    )
+                } else {
+                    None
+                }
+            };
+            if let Some(fut) = send_fut {
+                fut.await
+                    .map_err(|e| JsValue::from_str(&format!("{e:?}")))?;
+            }
+            Ok(())
         }
 
         #[wasm_bindgen]

@@ -1,6 +1,8 @@
 # Run fast quality gate checks (fmt, clippy, test, security, docs-check)
 [group('check')]
-check: fmt clippy test security docs-check
+check:
+    cargo fmt --all
+    just fmt clippy test security docs-check
 
 # Run ALL CI-equivalent checks (fast + wasm, docs-strict, udeps)
 [group('check')]
