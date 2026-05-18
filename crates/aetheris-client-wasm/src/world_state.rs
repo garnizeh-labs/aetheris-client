@@ -11,6 +11,7 @@ use aetheris_protocol::types::{
     AgentKind, AgentProperties, BEAM_MARKER_KIND, ClientId, ComponentKind, LocalId, NetworkId,
     Transform,
 };
+
 use std::collections::{BTreeMap, VecDeque};
 
 #[derive(Clone, Copy, Debug)]
@@ -53,6 +54,9 @@ pub struct ClientWorld {
     /// Authoritative world boundaries received from the server.
     /// Used for toroidal wrapping in Sandbox mode.
     pub workspace_bounds: Option<aetheris_protocol::types::WorkspaceBounds>,
+    /// Buffer for component updates from unrecognized/extension kinds (>= 0x1000).
+    /// Drained each tick by platform extensions.
+    pub extended_component_buffer: Vec<ComponentUpdate>,
 }
 
 impl Default for ClientWorld {
@@ -94,6 +98,7 @@ impl ClientWorld {
             } else {
                 None
             },
+            extended_component_buffer: Vec::new(),
         }
     }
 }
@@ -285,11 +290,12 @@ impl ClientWorld {
         if let aetheris_protocol::events::PlatformEvent::Possession { network_id } = event {
             let prev = self.player_network_id;
             tracing::info!(
-                ?network_id,
-                ?prev,
+                network_id = %network_id.0,
+                prev = ?prev,
                 entity_exists = self.entities.contains_key(network_id),
                 total_entities = self.entities.len(),
-                "[handle_platform_event] POSSESSION received — updating player_network_id"
+                all_ids = ?self.entities.keys().map(|k| k.0).collect::<Vec<_>>(),
+                "[handle_platform_event] POSSESSION received"
             );
             // Clear the local-player flag from the previous entity if it differs.
             if let Some(slot) = prev
@@ -405,12 +411,13 @@ impl ClientWorld {
             aetheris_protocol::types::WORKSPACE_BOUNDS_KIND => {
                 self.handle_workspace_bounds_update(update);
             }
-            ComponentKind(0x2007) => self.handle_presence_update(update),
             kind => {
+                // Buffer unrecognized component kinds for platform extensions to process.
+                self.extended_component_buffer.push(update.clone());
                 tracing::debug!(
                     network_id = update.network_id.0,
                     kind = kind.0,
-                    "Unhandled component kind"
+                    "Buffered extended component kind"
                 );
             }
         }
@@ -481,7 +488,7 @@ impl ClientWorld {
                         self.input_history.clear();
                     }
 
-                    if transform.entity_type != 0 && entry.entity_type != 0x2007 {
+                    if transform.entity_type != 0 && entry.entity_type < 0x1000 {
                         entry.entity_type = transform.entity_type;
                     }
                 }
@@ -613,35 +620,6 @@ impl ClientWorld {
             }
             Err(e) => {
                 tracing::warn!(network_id = update.network_id.0, error = ?e, "Failed to decode IntegrityPool");
-            }
-        }
-    }
-
-    fn handle_presence_update(&mut self, update: &ComponentUpdate) {
-        #[derive(serde::Deserialize)]
-        struct PresenceMinimal {
-            x: f32,
-            y: f32,
-            #[allow(dead_code)]
-            name: String,
-            #[allow(dead_code)]
-            client_id: ClientId,
-        }
-
-        match rmp_serde::from_slice::<PresenceMinimal>(&update.payload) {
-            Ok(presence) => {
-                if let Some(entry) = self.entities.get_mut(&update.network_id) {
-                    entry.x = presence.x;
-                    entry.y = presence.y;
-                    entry.entity_type = 0x2007; // External Presence
-                }
-            }
-            Err(e) => {
-                tracing::warn!(
-                    network_id = update.network_id.0,
-                    error = ?e,
-                    "Failed to decode PresenceMinimal"
-                );
             }
         }
     }
