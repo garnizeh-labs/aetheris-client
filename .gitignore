@@ -28,3 +28,6 @@ crates/aetheris-client-wasm/target/dev-certs/
 playground/node_modules/
 playground/dist/
 playground/.vite/
+
+# --- Local Cargo Config (Local overrides/patches) ---
+.cargo/config.toml

@@ -1,3 +1,5 @@
 [workspace]
 # Use the existing cliff.toml for changelog generation
 changelog_config = "cliff.toml"
+publish = false
+git_only = true
