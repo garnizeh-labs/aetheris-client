@@ -20,8 +20,8 @@ aetheris-client-wasm = { path = "crates/aetheris-client-wasm", version = "0.3.27
 aetheris-client-native = { path = "crates/aetheris-client-native", version = "0.3.27" }
 
 # Protocol (published — garnizeh-labs/aetheris-protocol)
-aetheris-protocol = { version = "0.2.23" }
-aetheris-encoder-serde = { version = "0.2.23" }
+aetheris-protocol = { version = "0.2.24" }
+aetheris-encoder-serde = { version = "0.2.24" }
 
 # Core Traits & Utilities
 thiserror = "2.0.18"
@@ -76,5 +76,5 @@ codegen-units = 1 # Better LTO
 
 [patch.crates-io]
 # Local path overrides — remove when aetheris-protocol is published to crates.io
-aetheris-protocol = { path = "../aetheris-protocol/crates/aetheris-protocol" }
-aetheris-encoder-serde = { path = "../aetheris-protocol/crates/aetheris-encoder-serde" }
+# aetheris-protocol = { path = "../aetheris-protocol/crates/aetheris-protocol" }
+# aetheris-encoder-serde = { path = "../aetheris-protocol/crates/aetheris-encoder-serde" }
